@@ -74,13 +74,13 @@ writeDataTable(wb,sheet=1,x=tabRoySpec_Table,colNames = T , rowNames = F )
 writeDataTable(wb,sheet=2,x=tabRoySpec,colNames = T , rowNames = F )
 setColWidths(wb,1,cols=1:ncol(tabRoySpec_Table),"auto")
 setColWidths(wb,2,cols=1:ncol(tabRoySpec),"auto")
-saveWorkbook(wb,paste0(dosSpec,"/","specRoy.xlsx"),overwrite=T)
-if(!"specFinal.xlsx"%in%dir(dosSpec))
-{saveWorkbook(wb,paste0(dosSpec,"/","specFinal.xlsx"))}
+saveWorkbook(wb,paste0(dosSpec,"/","spec_csvPermanentBST_Roy.xlsx"),overwrite=T)
+if(!"spec_csvPermanentBST_Final.xlsx"%in%dir(dosSpec))
+{saveWorkbook(wb,paste0(dosSpec,"/","spec_csvPermanentBST_Final.xlsx"))}
 ```
 
 ```
-gsub("[“”]","\"",openxlsx::read.xlsx(paste0(dosSpec,"/","specFinal.xlsx"))[,2])
+gsub("[“”]","\"",openxlsx::read.xlsx(paste0(dosSpec,"/","spec_csvPermanentBST_Final.xlsx"))[,2])
 ```
 
 
@@ -106,7 +106,7 @@ read_Xlspec<-function(file_spec)
 ```
 
 ```{r}
-specs<-read_Xlspec(paste0(dosSpec,"/","specFinal.xlsx"))
+specs<-read_Xlspec(paste0(dosSpec,"/","spec_csvPermanentBST_Final.xlsx"))
 ```
 
 

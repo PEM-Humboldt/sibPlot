@@ -1,0 +1,49 @@
+---
+title: "Analyzing and reading the phytosociological files"
+author: "Marius Bottin"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+bibliography: "/home/marius/Travail/Bibliotheque/jabref/UNAL.bib"
+csl: "/home/marius/Travail/Bibliotheque/CSL/chicago.csl"
+output: 
+   pdf_document:
+     toc: true
+     toc_depth: 5
+     number_sections: true
+fontsize: 11pt
+geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
+linkcolor: gray
+urlcolor: blue
+citecolor: cyan
+header-includes:
+  - \usepackage{colortbl}
+  - \usepackage{xcolor}       
+  - \usepackage{lscape}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+--- 
+
+```{r, setup}
+require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
+opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.rebuild = F,formatSQL = TRUE)
+#fileFunctions<-dir("../sib_plot/functions/",pattern=".*\\.R")
+#sapply(fileFunctions,function(x)source(paste("../sib_plot/functions/",x,sep="")))
+```
+
+# Exploration of first phytosociological files
+
+
+```{r}
+dos<-"../../docFito/"
+files<-dir(dos,recursive = T,pattern="\\.xlsx$")
+dos_files<-paste(dos,files,sep="/")
+require(openxlsx)
+```
+
+```{r}
+(files_cur<-dos_files[2])
+wb1<-loadWorkbook(files_cur)
+sheets_wb1<-getSheetNames(files_cur)
+readWorkbook(wb1, sheet = sheets_wb1[1], fillMergedCells = T)
+openxlsx:::getCellInfo(wb1)
+
+```
