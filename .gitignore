@@ -1,0 +1,20 @@
+# R sessions files
+.Rhistory
+.Rapp.history
+.RData
+
+# R studio
+.Rproj.user/
+
+# knit and rmarkdown
+*_cache/
+**/*_cache/
+*.utf8.md
+*.knit.md
+
+
+# pdf files
+*.pdf
+
+# Excel lock files
+*.xlsx#
