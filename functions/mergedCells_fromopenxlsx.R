@@ -166,6 +166,7 @@ treatCellRange<-function(cellRange)
 xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_unMerged=NA,overwrite=T)
 {
   stopifnot(length(fileXl)==1)
+  regex_file<-"(.*)\\.xlsx$"
   if(writeFile)
   {
     fileXl_base<-basename(fileXl)
@@ -180,7 +181,6 @@ xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_
     }
   file_unmerged<-paste(dos_unMerged,sub(regex_file,"\\1_unmerged.xlsx",fileXl_base))
   }
-  regex_file<-"(.*)\\.xlsx$"
   stopifnot(grepl(regex_file,fileXl_base))
   sheetNames<-openxlsx::getSheetNames(fileXl)
   wb<-openxlsx::loadWorkbook(fileXl)
@@ -245,9 +245,3 @@ xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_
 }
 
 
-xlsxFile<-"../../XlTest/xl_files/Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx"
-sheet<-"Tabla 33"
-mergedCells<-getCellMerge(xlsxFile = xlsxFile, sheet = sheet )
-treatCellRange(mergedCells)
-dos_unMerged<-"../../XlTest/xl_files/unmerged/"
-xl_fillMerged(xlsxFile,dos_unMerged = dos_unMerged )

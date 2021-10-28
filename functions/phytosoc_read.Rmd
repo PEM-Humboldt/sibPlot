@@ -64,15 +64,59 @@ cell_info <- openxlsx:::getCellInfo(xmlFile = worksheet, sharedStrings = sharedS
 merge_mapping <- mergeCell2mapping(cell_info$cellMerge)#31
 ```
 
+### Work on openxlsx functions
 
+Finally I made all the work with the *openxlsx* package.
+I extracted the methods from the *openxlsx* package in a very dirty way (I had to use many times the "openxlsx:::" operande to extract inside hidden function from the package), which might become a problem when/if we will build a package.
+
+All the work is in the file [mergedCells_fromopenxlsx.R](./mergedCells_fromopenxlsx.R).
+
+All the code there are functions, so the idea is to source this R script and everything should work!
+
+```{r}
+source("./mergedCells_fromopenxlsx.R")
+```
+
+The important function in the code is: *xl_fillMerged*
+It takes the following arguments:
+
+```{r}
+args(xl_fillMerged)
+```
+
+* fileXl is the name of the file with its (relative) path
+* getWorkbook is a boolean which allows to get a *openxlsx* workbook when T. Otherwise the function return the data from all the sheets, after having separated and filled the merged cells with the merged value
+* writeFile: boolean: do we want to write the modified file
+* dos_unMerged is the path of the directory where we want to write the file, if not given the directory is the directory of the original file (note that the file will be called the same than the original file, but with "_unmerged" before the extension)
+* overwrite: boolean, do we want to overwrite any file called like the unMerged file (note that the file will be called the same than the original file, but with "_unmerged" before the extension)
+
+
+```{r}
+xlsxFile<-"../../XlTest/xl_files/Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx"
+sheet<-"Tabla 33"
+mergedCells<-getCellMerge(xlsxFile = xlsxFile, sheet = sheet )
+treatCellRange(mergedCells)
+dos_unMerged<-"../../XlTest/xl_files/unmerged/"
+xl_fillMerged(xlsxFile,dos_unMerged = dos_unMerged )
+```
 
 ## Python openpyxl method
+
+*********************
+
+**Note**:
+At first I thought that it would be easier to work on some python code that I found on internet, but finally... not so easy!
+
+Anyway I'll keep the code here because it might result easier when we will build a package if the hidden method functions of *openxlsx* are difficult to import in the package...
+
+*********************
+
 
 In internet, there are more information about the *openpyxl* python method
 
 In order to use python3 in this document, we first call the package *reticulate* and then we choose the right python location:
 
-We first need to install the openpyxl in the conda
+We first need to install the openpyxl package
 ```{r}
 require(reticulate)
 #use_condaenv("r-reticulate")
@@ -106,7 +150,7 @@ py$files_xl=rep(names(sheetNames),sapply(sheetNames, length))
 py$xl_sheet=unlist(sheetNames)
 ```
 
-```{python}
+```python
 files_xl
 xl_sheet
 print(len(files_xl))
