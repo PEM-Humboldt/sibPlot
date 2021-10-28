@@ -29,6 +29,105 @@ opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.re
 #sapply(fileFunctions,function(x)source(paste("../sib_plot/functions/",x,sep="")))
 ```
 
+
+# Merged cells
+
+## The openxlsx methods for merged cells
+
+The problem with phytosociological files is that they contain a lot of merged cells.
+
+I first check on the functions of the package *openxlsx* if there was a solution to unmerge cells and replicate the values for all merged cells, but the option *fillMergedCells* of the function read.xlsx does not work.
+
+Further search in the internal functions allowed me to find the following:
+
+```{r}
+require(openxlsx)
+methods(read.xlsx)
+A<-as.character(getAnywhere(read.xlsx.default))
+cat(A,file="read.xlsx.default.R")
+A<-readLines("read.xlsx.default.R")
+A[grep("merge",A)]
+file.remove("read.xlsx.default.R")
+```
+
+
+It seems complicated to look further in the methods, but it seems that the methods used in the *openxlsx* functions make a mapping of the merged cells.
+The mapping is made after unzipping the formats of the xlsx files to read the xml information of the file.
+```r
+xlsxFile<-"../../XlTest/xl_files/Arreglo PERIJA HUMBOLDT (1).xlsx"
+sheet<-"Hoja1"
+na.strings<-"NA"
+xmlDir <- file.path(tempdir(), paste0(sample(LETTERS, 10), collapse = ""), "_excelXMLRead")
+xmlFiles <- unzip(xlsxFile, exdir = xmlDir)
+worksheet <- xmlFiles[grepl(tolower(sheet), tolower(xmlFiles), fixed = TRUE)]
+cell_info <- openxlsx:::getCellInfo(xmlFile = worksheet, sharedStrings = sharedStrings, skipEmptyRows = skipEmptyRows, startRow = startRow, rows = rows, getDates = detectDates)#29
+merge_mapping <- mergeCell2mapping(cell_info$cellMerge)#31
+```
+
+
+
+## Python openpyxl method
+
+In internet, there are more information about the *openpyxl* python method
+
+In order to use python3 in this document, we first call the package *reticulate* and then we choose the right python location:
+
+We first need to install the openpyxl in the conda
+```{r}
+require(reticulate)
+#use_condaenv("r-reticulate")
+#reticulate::conda_install(packages="openpyxl")
+#reticulate::conda_install(packages="panda")
+use_python("/usr/bin/python3")
+```
+
+Then the following code in Python3 allows to map the merged cells in a xlsx sheet (note that you need first to install the python *openpyxl* library:
+
+```{python}
+from openpyxl import load_workbook
+wb=load_workbook("../../XlTest/xl_files/Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx")
+sheet_ranges=wb['Tabla 33']
+print(sheet_ranges.merged_cells.ranges)
+```
+
+The idea then is to export the merged cells in a file so we can read it from R and allow to merge them in R.
+It is a temporary solution and a "all R" solution would be much more appropriate in the future, but that is what we got for now.
+
+
+So now, let's try to pass address of the files and sheets we need to treat from R to python
+
+```{r}
+require(openxlsx)
+dos<-"../../XlTest/xl_files/"
+files<-dir(dos,pattern=".*.xlsx$")
+sheetNames<-lapply(paste(dos,files,sep="/"),getSheetNames)
+names(sheetNames)<-paste(dos,files,sep="")
+py$files_xl=rep(names(sheetNames),sapply(sheetNames, length))
+py$xl_sheet=unlist(sheetNames)
+```
+
+```{python}
+files_xl
+xl_sheet
+print(len(files_xl))
+print(len(xl_sheet))
+txtFile = open("mergedFiles.txt","a+")
+for i in range(len(files_xl)):
+  wb=load_workbook(files_xl[i])
+  sheet_ranges=wb[xl_sheet[i]]
+  txtFile.write(files_xl[i])
+  txtFile.write("\t")
+  txtFile.write(xl_sheet[i])
+  txtFile.write("\t")
+  merged = sheet_ranges.merged_cells.ranges
+  for j in range(len(merged))
+    txtFile.write(merged[j])
+
+
+
+```
+
+
 # Exploration of first phytosociological files
 
 
@@ -36,7 +135,6 @@ opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.re
 dos<-"../../docFito/"
 files<-dir(dos,recursive = T,pattern="\\.xlsx$")
 dos_files<-paste(dos,files,sep="/")
-require(openxlsx)
 ```
 
 ```{r}
@@ -44,6 +142,5 @@ require(openxlsx)
 wb1<-loadWorkbook(files_cur)
 sheets_wb1<-getSheetNames(files_cur)
 readWorkbook(wb1, sheet = sheets_wb1[1], fillMergedCells = T)
-openxlsx:::getCellInfo(wb1)
 
 ```
