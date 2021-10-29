@@ -203,7 +203,7 @@ xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_
       res$valueOri<-x[cbind(row=y$from_row,col=y$from_col)]
       return(res)
     }else{return(NULL)}
-  },data_wb,mergedCells_t)
+  },data_wb,mergedCells_t,SIMPLIFY = F)
   names(mergedCells_v)<-sheetNames
   mergedCells_v<-lapply(mergedCells_v,function(x)
     if(is.null(x)){return(NULL)}else{
