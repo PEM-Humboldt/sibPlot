@@ -100,6 +100,19 @@ dos_unMerged<-"../../XlTest/xl_files/unmerged/"
 xl_fillMerged(xlsxFile,dos_unMerged = dos_unMerged )
 ```
 
+************************************
+
+Note: I realized afterward that there might be a way to analyze directly the workbook object without having to pass through all this long process and working from there... 
+Don't know why I did not think about that before
+Hints: apply a "str" to a workbook of an excel file in *openxlsx*: there are some substructure concerning merged cells...
+
+
+*************************************
+
+
+
+
+
 ## Python openpyxl method
 
 *********************
@@ -174,17 +187,96 @@ for i in range(len(files_xl)):
 
 # Exploration of first phytosociological files
 
+## Reading the files
 
 ```{r}
 dos<-"../../docFito/"
 files<-dir(dos,recursive = T,pattern="\\.xlsx$")
+files<-files[!grepl("_unmerged",files)]
 dos_files<-paste(dos,files,sep="/")
 ```
 
-```{r}
-(files_cur<-dos_files[2])
-wb1<-loadWorkbook(files_cur)
-sheets_wb1<-getSheetNames(files_cur)
-readWorkbook(wb1, sheet = sheets_wb1[1], fillMergedCells = T)
+First we will create the unmerged-cells xlsx files in the unmerged folder:
 
+```{r}
+data_unMerged<-lapply(dos_files,xl_fillMerged,getWorkbook=F,dos_unMerged=paste0(dos,"unmergedCellsXlsx/"))
 ```
+
+Then we read the excel files in a raw form in order to analyse their format:
+
+```{r}
+data_raw<-lapply(dos_files,function(x)
+  {A<-openxlsx::getSheetNames(x)
+  lapply(A,read.xlsx,xlsxFile=x,colNames=F,skipEmptyRows=F,skipEmptyCols=F)
+  })
+names(data_raw)<-names(data_unMerged)<-dos_files
+data_raw<-mapply(function(x,y){names(x)<-names(y);return(x)},data_raw,data_unMerged)
+```
+
+## Determining what data contain each sheet
+
+En los archivos enviados por O. Rangel, hay diferentes tipos de datos:
+
+1. tabla de clasificación fitosociologica (ver "Arreglo PERIJA HUMBOLDT (1).xlsx"). Este tipo de tabla parece consistir en una sola tabla clara, cuadrada, y los nombres de columnas en la linea 1 debería permitir ver si un sheet es corresponde a este tipo
+2. tabla de ubicación (ver "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", sheet 1). Parece que este tipo de tabla siempre tiene su descripción en la primera celda. 
+3. tabla de ubicación y area (ver "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", sheet 2)
+4. tabla de levantamiento (ver "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", sheet 3 a n y los sheet de "vegetacion paramo perija (1).xlsx"). Esas tablas están en 2 partes: una parte de descripción de levantamiento, y una parte dando la composición de los levantamientos. Podríamos basarnos en varios criterios para determinar si estamos en este tipo de datos, pero uno de los más practico podría ser basarse en la mención de Área basal, Cobertura o cobertura relativa: este corresponde a una celda "merged", que toma toda una linea (a veces sin la primera celda de la linea)
+
+
+
+
+
+
+```{r}
+lapply(data_unMerged,sapply,function(x)x[1,1])
+```
+
+This function will check whether the first cell of the sheet contains some description of the table
+```{r}
+firstCellTitle<-function(sheetRawData)
+{
+  regexDesc<-"^ *Tabla *[0-9]{1,3}\\."
+  grepl(regexDesc,sheetRawData[1,1])
+}
+lapply(data_unMerged,sapply,firstCellTitle)
+```
+
+
+This one will check whether there is a line containing only the description of the coverage method and will return:
+
+* a boolean telling whether it found it
+* which one (see regexes in code for details)
+* at which line
+
+```{r}
+linePhytoCoverage<-function(sheetRawData,headRows=15)
+{
+  emptyRow<-which(apply(sheetRawData,1,function(x)all(is.na(x))))
+  #stopifnot(all(emptyRow>headRows))
+  uniqueOnRow_head<-apply(sheetRawData[1:headRows,],1,function(x)
+    unique(na.omit(x))
+    )
+  only1Value_head<-sapply(uniqueOnRow_head,length)==1
+  regexes_phytoCoverage<-c(areaBasal="^ *[ÁA]rea *basal *(\\(\\%\\))? *$" , cobertura="^ *Cobertura *(\\(%\\))? *$" , coberturaRelativa="^ *Cobertura *relativa *(\\(%\\))? *$")
+  #regexes_phytoCoverage<-c(areaBasal="^ *[ÁA]rea *basal *" , cobertura="$ *Cobertura *(\\(%\\))? *$" , coberturaRelativa="$ *Cobertura *relativa *(\\(%\\))? *$")
+  testRegexes<-matrix(Reduce(c,lapply(regexes_phytoCoverage,grepl,uniqueOnRow_head[only1Value_head])),ncol=sum(only1Value_head),nrow=length(regexes_phytoCoverage))
+  w_t<-which(testRegexes,arr.ind = T)
+  stopifnot(nrow(w_t)<=1)
+  if(nrow(w_t)==1)
+  {
+    res<-list(lineFound=T,
+           type=names(regexes_phytoCoverage)[w_t[,"col"]],
+           line=which(only1Value_head)[w_t[,"row"]]
+           )
+  }else{
+    res<-list(lineFound=F,
+           type=NA,
+           line=NA
+           )
+  }
+  return(res)
+}
+lapply(data_raw,sapply,linePhytoCoverage)
+```
+
+
