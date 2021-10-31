@@ -265,8 +265,8 @@ linePhytoCoverage<-function(sheetRawData,headRows=15)
   if(nrow(w_t)==1)
   {
     res<-list(lineFound=T,
-           type=names(regexes_phytoCoverage)[w_t[,"col"]],
-           line=which(only1Value_head)[w_t[,"row"]]
+           type=names(regexes_phytoCoverage)[w_t[,"row"]],
+           line=which(only1Value_head)[w_t[,"col"]]
            )
   }else{
     res<-list(lineFound=F,
@@ -276,7 +276,46 @@ linePhytoCoverage<-function(sheetRawData,headRows=15)
   }
   return(res)
 }
+```
+
+The function linePhytoCoverage works on unmerged and raw data extracted from the excel files and allows to find the line which:
+
+* makes the separation between metadata and compositions
+* explicit which measure of coverage is used in the composition table
+
+Moreover, it allows to recognise the sheets which correspond to the "tabla de levantamiento" (it might not be sufficient for that goal on the long run, but it works with the few files we got for now).
+
+```{r}
 lapply(data_raw,sapply,linePhytoCoverage)
+lapply(data_unMerged,sapply,linePhytoCoverage)
+```
+
+
+```{r}
+
+getMetadataPhytoXl<-function(sheet_unMerged)# In the future we might need to pass the file and sheet to the function (in order to keep them in the metadata)
+{
+  lpc_info<-linePhytoCoverage(sheet_unMerged)
+  firstLineTitle<-firstCellTitle(sheet_unMerged)
+  if(firstLineTitle){
+    title<-sheet_unMerged[1,1]
+  }else{
+    title<-NULL
+  }
+  if(firstLineTitle)row_meta <- 2:lpc_info$line else row_meta<- 1:lpc_info$line # fix lpc_info$line is 1 too much
+  col_meta<-1:ncol(sheet_unMerged)
+  COLN<-sheet_unMerged[row_meta,1]
+  if(any(duplicated(COLN)))
+  {NA}# TODO fix the cases where the names of the row were unmerged and duplicated (paste the values of the 2 lines) 
+  #Hints: make a specific function to find values that are neighbors and equals
+  # paste the values in the first one for the table
+  (tab_meta<-type.convert(data.frame(t(sheet_unMerged[row_meta,col_meta[-1]])),as.is=T))
+}
+```
+
+
+```{r}
+getCompoPhytoXl<-function(sheet_unMerged)
 ```
 
 
