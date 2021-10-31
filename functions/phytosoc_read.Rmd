@@ -315,7 +315,114 @@ getMetadataPhytoXl<-function(sheet_unMerged)# In the future we might need to pas
 
 
 ```{r}
+wb<-loadWorkbook(xlsxFile)
+getSquaredBorderRegions<-function(wb,sheet)
+{
+  style_sheet<-wb$styleObjects[sapply(wb$styleObjects,function(x)x$sheet)==sheet]
+  borderStyle<-sapply(style_sheet,function(x)
+  {
+    border<-c(
+      bottom=!is.null(x[[1]]$borderBottom),
+      top=!is.null(x[[1]]$borderTop),
+      left=!is.null(x[[1]]$borderLeft),
+      right=!is.null(x[[1]]$borderRight)
+    )
+    if(!sum(border)%in%c(1,2))
+    {return(NA)}
+    if(sum(border)==1)
+    {return(names(border)[border])}
+    if(sum(border)==2)
+    {
+      if(all(border[c(2,3)])){return("topleft")}
+      if(all(border[c(2,4)])){return("topright")}
+      if(all(border[c(1,3)])){return("bottomleft")}
+      if(all(border[c(1,4)])){return("bottomright")}
+    }
+    return(NA)
+  })
+  cellBorder<-Reduce(rbind.data.frame,mapply(function(x,y)
+  {
+    if(is.na(y)){return(NULL)}
+    return(data.frame(r=x$rows,c=x$cols,border=y))
+  },style_sheet,borderStyle,SIMPLIFY=F))
+  res<-data.frame(topleft.x=NULL,topleft.y=NULL,bottomright.x=NULL,bottomright.y=NULL)
+  if(nrow(cellBorder)==0){return(res)}
+  cellBorder<-cellBorder[order(cellBorder$r,cellBorder$c),]
+  topLefts<-cellBorder[cellBorder$border=="topleft",]
+  for(i in 1:nrow(topLefts))
+  {
+    curTopLeft<-as.list(topLefts[i,])
+    #checkTopRight and top
+    corresTopRights<-cellBorder[cellBorder$border=="topright"&
+                                 cellBorder$r==curTopLeft$r&
+                                 cellBorder$c>curTopLeft$c,]
+    if(nrow(corresTopRights)==0){next}
+    corresTopRight<-as.list(corresTopRights[which.min(corresTopRight$c),])
+    condTopOK<-(
+      (curTopLeft$c+1)==corresTopRight$c|
+      all(
+      (curTopLeft$c+1):(corresTopRight$c-1)%in%cellBorder[cellBorder$border=="top"&cellBorder$r==curTopLeft$r,"c"]))
+    if(!condTopOK){next}
+    #check bottomleft and left
+    corresBottomLefts<-cellBorder[cellBorder$border=="bottomleft"&
+                                 cellBorder$c==curTopLeft$c&
+                                 cellBorder$r>curTopLeft$r,]
+    if(nrow(corresBottomLefts)==0){next}
+    corresBottomLeft<-as.list(corresBottomLefts[which.min(corresBottomLefts$c),])
+    condLeftOK<-(
+      (curTopLeft$r+1)==corresBottomLeft$r|
+        all(
+      (curTopLeft$r+1):(corresBottomLeft$r-1)%in%cellBorder[cellBorder$border=="left"&cellBorder$c==curTopLeft$c,"r"])
+    )
+    if(!condLeftOK){next}
+      # checking bottomright
+    condBottomRightOK<-any(cellBorder$border=="bottomright"&cellBorder$r==corresBottomLeft$r&cellBorder$c==corresTopRight$c)
+    if(!condBottomRightOK){next}
+      #checking bottom
+    condBottomOK<-(curTopLeft$c+1)==corresTopRight$c|all(
+        (curTopLeft$c+1):(corresTopRight$c-1)%in%cellBorder[cellBorder$border=="bottom"&cellBorder$r==corresBottomLeft$r,"c"]
+      )
+    if(!condBottomOK){next}
+      #checking right
+    condRightOK<-(curTopLeft$r+1)==corresBottomLeft$r|all(
+         (curTopLeft$r+1):(corresBottomLeft$r-1)%in%cellBorder[cellBorder$border=="right"&cellBorder$c==corresTopRight$c,"r"]
+      )
+    if(!condRightOK){next}
+    #append res
+    res<-rbind(res,data.frame(topleft.x=curTopLeft$c,topleft.y=curTopLeft$r,bottomright.x=corresTopRight$c,bottomright.y=corresBottomLeft$r))
+    
+  }
+  return(res)
+}
+
+getSquaredBorderRegions(wb,sheet)
+
+test<-function(styleWb)
+{
+  c(
+  bot=!is.null(styleWb[[1]]$borderBottom),
+  top=!is.null(styleWb[[1]]$borderTop),
+  lef=!is.null(styleWb[[1]]$borderLeft),
+  rig=!is.null(styleWb[[1]]$borderRight)
+  )
+}
+style_sheet[apply(sapply(style_sheet,test),2,sum)==2]
+
+
+
+getRectInWorkbook<-function(wb)
+{
+  
+}
+
+
 getCompoPhytoXl<-function(sheet_unMerged)
+{
+  lpc_info<-linePhytoCoverage(sheet_unMerged)
+  rows_compo<-(lpc_info$line+1):nrow(sheet_unMerged)
+  sheet_unMerged[rows_compo,1]
+  lines_syntax<-apply(sheet_unMerged[rows_compo,],1,function(x)all(is.na(x[2:length(x)])))
+}
 ```
 
 
