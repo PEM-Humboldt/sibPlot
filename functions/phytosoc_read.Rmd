@@ -314,6 +314,8 @@ getMetadataPhytoXl<-function(sheet_unMerged)# In the future we might need to pas
 ```
 
 
+
+
 ```{r}
 wb<-loadWorkbook(xlsxFile)
 getSquaredBorderRegions<-function(wb,sheet)
@@ -397,31 +399,43 @@ getSquaredBorderRegions<-function(wb,sheet)
 
 getSquaredBorderRegions(wb,sheet)
 
-test<-function(styleWb)
+
+treatTaxName<- function(taxNames)
 {
-  c(
-  bot=!is.null(styleWb[[1]]$borderBottom),
-  top=!is.null(styleWb[[1]]$borderTop),
-  lef=!is.null(styleWb[[1]]$borderLeft),
-  rig=!is.null(styleWb[[1]]$borderRight)
-  )
-}
-style_sheet[apply(sapply(style_sheet,test),2,sum)==2]
-
-
-
-getRectInWorkbook<-function(wb)
-{
+  taxNames_init<-taxNames
+  # there seems to be different things in parentheses: external references to the species identification, and in the case of rare species: their presences in some relevés 
+  # Eliminate irrelevant spaces:
+  taxNames<-sub("^[[:space:]]*","",taxNames)
+  taxNames<-sub("[[:space:]]*$","",taxNames)
+  taxNames<-sub("[[:space:]]+"," ",taxNames)
   
+  # keep as "CF" all what is after cf.
+  regex_cf_all<-" cf\\.?"
+  regex_cf<-"^([A-Za-z][[:alphanum:]]+) cf\\.? (.*)$"
+  weirdCf<-which(grepl(regex_cf_all,taxNames)&!grepl(regex_cf,taxNames))
+  if(length(weirdCf)>0)
+  {
+    for(i in weirdCf)
+      warning(paste("Taxon name:",taxNames_init[i],". We recognize a cf. case without being able to treat it."))
+  }
+    
 }
-
 
 getCompoPhytoXl<-function(sheet_unMerged)
 {
   lpc_info<-linePhytoCoverage(sheet_unMerged)
   rows_compo<-(lpc_info$line+1):nrow(sheet_unMerged)
   sheet_unMerged[rows_compo,1]
-  lines_syntax<-apply(sheet_unMerged[rows_compo,],1,function(x)all(is.na(x[2:length(x)])))
+  rows_onlyRownames<-which(apply(sheet_unMerged,1,function(x)!is.na(x[1])&all(is.na(x[2:length(x)]))))
+  rows_oR_compo<-rows_onlyRownames[rows_onlyRownames>lpc_info$line]
+  rows_otrasEspecies<-rows_oR_compo[grepl(" *otras *especies *", sheet_unMerged[rows_oR_compo,1], ignore.case=T)]
+  emptyRows<-apply(sheet_unMerged,1,function(x)all(is.na(x)))
+  if(length(line_otrasEspecies)>1)
+  {warning("More than one line seems to delimit the \"other species\" zone.")
+    line_otrasEspecies<-line_otrasEspecies[1]
+  }
+  rowsTax<-rows_compo[!rows_compo%in%rows_oR_compo&!rows_compo%in%emptyRows]
+  taxDesc<-sheet_unMerged[rowsTax,1]
 }
 ```
 
