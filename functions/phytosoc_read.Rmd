@@ -359,7 +359,7 @@ getSquaredBorderRegions<-function(wb,sheet)
                                  cellBorder$r==curTopLeft$r&
                                  cellBorder$c>curTopLeft$c,]
     if(nrow(corresTopRights)==0){next}
-    corresTopRight<-as.list(corresTopRights[which.min(corresTopRight$c),])
+    corresTopRight<-as.list(corresTopRights[which.min(corresTopRights$c),])
     condTopOK<-(
       (curTopLeft$c+1)==corresTopRight$c|
       all(
