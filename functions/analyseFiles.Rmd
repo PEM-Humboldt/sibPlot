@@ -225,7 +225,7 @@ checkNamesFields<-function(read,categ,listFieldCateg)
   return(res)
 }
 
-C<-checkNamesFields(colListRead = colRead, categ = an_fi$type_cat, listFieldCateg = listField)
+#C<-checkNamesFields(read = colRead, categ = an_fi$type_cat, listFieldCateg = listField)
 ```
 
 
@@ -287,6 +287,6 @@ read.csv(paste0(dos,"/metadata_",ex,".csv"))
 
 read_metadata<-function(file)
 {
-  
+  NA
 }
 ```
