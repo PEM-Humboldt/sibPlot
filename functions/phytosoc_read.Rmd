@@ -441,15 +441,85 @@ The order of the operations may be of great importance, so here is the order we 
 # * create an external function for the taxonomic levels guessing
 # * reorganize the steps following the text
 
-treatTaxNameXlPhyto<- function(taxNames)
+# create regex object (external to the functions) for guessing taxonomic levels
+taxo_treatNames_plant<-list(
+  regex_lev= c(
+    undeter= "[UIui]ndetermin[ae]d[ao]?",
+    subsp= "^([A-Z][[:alpha:]-]+) ([[:alpha:]-]+) subsp(\\.| ){1,2}([[:alpha:]-]+)$",
+    var= "^([A-Z][[:alpha:]-]+) ([[:alpha:]-]+) var(\\.| ){1,2}([[:alpha:]-]+)$",
+    sp= "^([A-Z][[:alpha:]-]+) ([[:alpha:]-]+)$",
+    fam= "^([A-Z][[:alpha:]-]+aceae)$",
+    subfam= "^([A-Z][[:alpha:]-]+oideae)$",
+    supfam= "^([A-Z][[:alpha:]-]+acea)$",
+    subor= "^([A-Z][[:alpha:]-]+ineae)$",
+    or= "^([A-Z][[:alpha:]-]+ales)$",
+    supor= "^([A-Z][[:alpha:]-]+anae)$",
+    subcl= "^([A-Z][[:alpha:]-]+idae)$",
+    phyl= "^([A-Z][[:alpha:]-]+phyta)$",
+    subphyl= "^([A-Z][[:alpha:]-]+phytina)$",
+    cl= "^([A-Z][[:alpha:]-]+opsida)$",
+    subcl= "^([A-Z][[:alpha:]-]+opsida)$",
+    tribe= "^([A-Z][[:alpha:]-]+eae)$",
+    gn= "^([A-Z][[:alpha:]-]+)$"
+  ),
+  exceptions= data.frame(lev=c("fam"),name=c("Leguminosae")),
+  extracPart= list(
+    subsp=c("genus"="\\1","sp_epi"="\\2","subspecies"="\\4"),
+    var=c("genus"="\\1","sp_epi"="\\2","variety"="\\4"),
+    sp=c("genus"="\\1","sp_epi"="\\2")
+  )
+  
+)
+
+guess_level<- function(taxNames,regex_lev,exceptions,order_reg=NA)
 {
+  if(is.na(order_reg))
+  {
+    order_reg=names(regex_lev)
+  }
+  regex_lev<-regex_lev[match(names(regex_lev),order_reg)]
+  testRegex<-sapply(regex_lev,function(reg,nam)grepl(reg,nam),nam=taxNames)
+  unable_guess<-which(rowSums(testRegex)==0)
+  if(length(unable_guess)>0)
+  {
+    for(i in unable_guess)
+    {
+      warning(paste0("We were unable to guess the taxonomic level of \"",taxNames[unable_guess],"\""))
+    }
+  }
+  guessed<- colnames(testRegex)[apply(testRegex,1,function(x)which(x)[1])]
+  guessed[taxNames%in%exceptions$name]<- na.omit(exceptions[match(taxNames,exceptions$name),"lev"])
+  return(guessed)
+}
+
+extract_taxParts<- function(taxNames, tax_lev, regex_lev, extractPart)
+{
+  list_tax_lev<- tapply(taxNames,tax_lev,function(x)x)[names(extractPart)]
+  regex_app<-regex_lev[names(extractPart)]
+  separate<-mapply(function(names,regex,parts)
+  {
+    sapply(parts,function(x,n,r)sub(r,x,n),n=names,r=regex)
+  },list_tax_lev,regex_app,extractPart)
+  for(i in 1:length(separate))
+  {
+    res[[i]]<-data.frame(id_m= match(list_tax_lev[[i]],taxNames),separate[[i]])
+  }
+  return(res)
+}
+```
+
+
+```{r}
+treatTaxNameXlPhyto<- function(taxNames, lev_regex, exceptions_guessLev, extract_part)
+{
+  # Keeping initial taxNames
   taxNames_init<-taxNames
   # Eliminate irrelevant spaces:
   taxNames<-sub("^[[:space:]]*","",taxNames)
   taxNames<-sub("[[:space:]]*$","",taxNames)
   taxNames<-sub("[[:space:]]+"," ",taxNames)
-  
-  # there seems to be different things in parentheses: external references to the species identification, and in the case of rare species: their presences in some relevés 
+  # Working on parenthesis
+  ## there seems to be different things in parentheses: external references to the species identification, and in the case of rare species: their presences in some relevés 
   regexParenth_all<-"(\\(|\\))"
   regexParenth<- "^([[:alnum:] \\.-]+)[[:space:]]*\\((.+)\\)$"
   caseParenth<-grepl(regexParenth, taxNames)
@@ -482,7 +552,6 @@ treatTaxNameXlPhyto<- function(taxNames)
   }
   noCase<- which(caseParenth& !grepl(regexParDef, parenthesis)& !caseRegexRare)
   stopifnot(length(noCase)==0)
-   
   # keep as "CF" all what is after cf.
   regex_cf_all<-" cf\\.?"
   regex_cf<-"^([A-Za-z][[:alpha:]-]+) cf\\.? ?(.*)$"
@@ -496,7 +565,6 @@ treatTaxNameXlPhyto<- function(taxNames)
   CF<- character(length(taxNames))
   CF[caseCf]<- sub(regex_cf, "\\2",taxNames[caseCf])
   taxNames[caseCf]<-sub(regex_cf, "\\1", taxNames[caseCf])
-  
   # keep as AFF all what is after aff.
   regex_aff_all<-" aff\\."
   regex_aff<-"^([A-Za-z][[:alpha:]-]+) aff\\. (.*)$"
@@ -510,93 +578,46 @@ treatTaxNameXlPhyto<- function(taxNames)
   AFF<- character(length(taxNames))
   AFF[caseAff]<- sub(regex_aff, "\\2",taxNames[caseAff])
   taxNames[caseAff]<-sub(regex_aff, "\\1", taxNames[caseAff])
-  
   # ined. final
   regex_ined_fin<- "(.*) ined\\.$"
   INED<- grepl(regex_ined_fin, taxNames)
   taxNames[INED]<- sub(regex_ined_fin,"\\1",taxNames[INED])
-  
   # sp numbered
   regex_sp_numbered<- "^([A-Z][[:alpha:]-]+) sp\\.? ?([0-9]{1,2}\\.?)$"
   caseSpNumbered<- grepl(regex_sp_numbered, taxNames)
   SP_N<-character(length(taxNames))
   SP_N[caseSpNumbered]<- sub(regex_sp_numbered, "\\2", taxNames[caseSpNumbered])
   taxNames[caseSpNumbered]<- sub(regex_sp_numbered, "\\1", taxNames[caseSpNumbered])
-  
   # sp final
   regex_sp_final<- "^([A-Z][[:alpha:]-]+) sp\\.?$"
   SP_F<- grepl(regex_sp_final, taxNames)
   taxNames[SP_F]<- sub(regex_sp_final, "\\1", taxNames[SP_F])
-  
   #spp final
   regex_spp_final<- "^([A-Z][[:alpha:]-]+) spp\\.?$"
   SPP_F<- grepl(regex_spp_final, taxNames)
   taxNames[SPP_F]<- sub(regex_spp_final, "\\1", taxNames[SPP_F])
-  
-  # subspecies
-  regex_subsp<- "^([A-Z][[:alpha:]-]+ [[:alpha:]-]+) subsp(\\.| ){1,2}([[:alpha:]-]+)$"
-  caseSubsp<- grepl(regex_subsp, taxNames)
-  SUBSP<-character(length(taxNames))
-  SUBSP[caseSubsp]<- sub(regex_subsp,"\\3",taxNames[caseSubsp])
-  taxNames[caseSubsp]<- sub(regex_subsp,"\\1",taxNames[caseSubsp])
-  
-  # varieties
-  regex_var<- "^([A-Z][[:alpha:]-]+ [[:alpha:]-]+) var(\\.| ){1,2}([[:alpha:]-]+)$"
-  caseVar<- grepl(regex_var, taxNames)
-  VAR<-character(length(taxNames))
-  VAR[caseVar]<- sub(regex_var,"\\3",taxNames[caseVar])
-  taxNames[caseVar]<- sub(regex_var,"\\1",taxNames[caseVar])
-  
-  
-  
-  # check undetermined
-  regex_undet<-"[UIui]ndetermin[ae]d[ao]?"
-  UNDET<-grepl(regex_undet,taxNames)
-
-  # check families vs. genera
-  regex_sp<- "^([A-Z][[:alpha:]-]+) ([[:alpha:]-]+)"
-  SP<- grepl(regex_sp, taxNames)
-  SP_GEN_PART<-SP_EPI_PART<-character(length(taxNames))
-  SP_GEN_PART[SP]<-sub(regex_sp, "\\1", taxNames[SP])
-  SP_EPI_PART[SP]<-sub(regex_sp, "\\2", taxNames[SP])
-  
-  regex_one_word<- "^([A-Z][[:alpha:]-]+)$"
-  OW<- grepl(regex_one_word, taxNames)
-  
-  pbFormat<-which(!SP&!OW)
-  if(length(pbFormat)>0)
-  {
-    for(i in pbFormat)
-      warning(paste("Taxon \"",taxNames_init[pbFormat],"\": undefined format",sep=""))
-  }
-  
-  regex_fam<-"^([A-Z][[:alpha:]-]+aceae)$"
-  FAM<- grepl(regex_fam, taxNames)|taxNames=="Leguminosae"
-  regex_subfam<- "^([A-Z][[:alpha:]-]+oideae)$"
-  regex_supfam<- "^([A-Z][[:alpha:]-]+acea)$"
-  regex_subor<- "^([A-Z][[:alpha:]-]+ineae)$"
-  regex_or<- "^([A-Z][[:alpha:]-]+ales)$"
-  regex_supor<- "^([A-Z][[:alpha:]-]+anae)$"
-  regex_subcl<- "^([A-Z][[:alpha:]-]+idae)$"
-  regex_phyl<- "^([A-Z][[:alpha:]-]+phyta)"
-  regex_subphyl<-"^([A-Z][[:alpha:]-]+phytina)$"
-  regex_cl<- "^([A-Z][[:alpha:]-]+opsida)$"
-  regex_subcl<- "^([A-Z][[:alpha:]-]+opsida)$"
-  
-  
-  regex_tribe<- "^([A-Z][[:alpha:]-]+eae)$"
-  TRI<- !FAM&grepl(regex_tribe,taxNames)
-  
-  
-  taxNames[OW][grepl("ae$",taxNames[OW])&!grepl("aceae$",taxNames[OW])]
-  
-  cbind(taxNames_init,taxNames,CF)[taxNames!=taxNames_init,]  
+  guessed_lev<- guess_level(taxNames = taxNames,regex_lev = lev_regex,exceptions = exceptions_guessLev)
+  taxo_parts<-extract_taxParts(taxNames = taxNames, tax_lev = guessed_lev, regex_lev= lev_regex, extractPart = extract_part)
+  return(list(taxs=data.frame(verbatim=sinParenth, taxName=taxNames,guessed_level=guessed_lev),
+              taxo_extra=list(
+                cf= data.frame(taxMatch= which(caseCf), verbatimCf= CF[caseCf]),
+                aff= data.frame(taxMatch= which(caseAff), verbatimAff= AFF[caseAff]),
+                Ined= which(INED),
+                spNumbered= data.frame(taxMatch= which(caseSpNumbered), verbatimSp=SP_N[caseSpNumbered]),
+                spF= which(SP_F),
+                SPP_F= which(SPP_F),
+                taxParts= taxo_parts,
+                cataRef=data.frame(taxMatch=which(defTax!=""),catalog=defTax[defTax!=""])
+                ),
+              rareSpecies=rarePres
+              )
+  )
 }
 ```
 
 
 ```{r}
-getCompoPhytoXl<-function(sheet_unMerged)
+getCompoPhytoXl<-function(sheet_unMerged, lev_regex, exceptions_guessLev, extractPart)
 {
   lpc_info<-linePhytoCoverage(sheet_unMerged)
   rows_compo<-(lpc_info$line+1):nrow(sheet_unMerged)
@@ -614,10 +635,12 @@ getCompoPhytoXl<-function(sheet_unMerged)
   
   rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo|rows_compo>rows_otrasEspecies)&!rows_compo%in%emptyRows]}
   taxDesc<-sheet_unMerged[rowsTax,1]
+  taxo_treated<-treatTaxNameXlPhyto(taxDesc, lev_regex = lev_regex, exceptions_guessLev = exceptions_guessLev, extract_part = extractPart)
 }
 sheet_unMerged<-data_unMerged[[2]][[3]]
 data_unMerged_all<-Reduce(c,data_unMerged)
 Reduce(c,lapply(data_unMerged_all[sapply(data_unMerged_all,function(x)linePhytoCoverage(x)$lineFound)], getCompoPhytoXl))->taxNames
+treatTaxo<- treatTaxNameXlPhyto(taxNames, lev_regex = taxo_treatNames_plant$regex_lev, exceptions_guessLev = taxo_treatNames_plant$exceptions,extract_part = taxo_treatNames_plant$extracPart)
 ```
 
 
