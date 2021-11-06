@@ -306,13 +306,31 @@ getMetadataPhytoXl<-function(sheet_unMerged)# In the future we might need to pas
   if(firstLineTitle)row_meta <- 2:lpc_info$line else row_meta<- 1:lpc_info$line # fix lpc_info$line is 1 too much
   col_meta<-1:ncol(sheet_unMerged)
   COLN<-sheet_unMerged[row_meta,1]
-  if(any(duplicated(COLN)))
-  {NA}# TODO fix the cases where the names of the row were unmerged and duplicated (paste the values of the 2 lines) 
-  #Hints: make a specific function to find values that are neighbors and equals
-  # paste the values in the first one for the table
-  (tab_meta<-type.convert(data.frame(t(sheet_unMerged[row_meta,col_meta[-1]])),as.is=T))
+  dupCOLN<-duplicated(COLN)
+  tempoMeta<-sheet_unMerged[row_meta,col_meta]
+  if(length(dupCOLN)>0)
+  {
+    dupliValues<- unique(COLN[duplicated(COLN)])
+    w_dupliValues<-lapply(dupliValues,function(x,coln)which(coln==x),coln=COLN)
+    for(i in 1:length(w_dupliValues))
+    {
+      tempoMeta[w_dupliValues[[i]][1], 2:ncol(tempoMeta)]<-apply(tempoMeta[w_dupliValues[[i]], 2:ncol(tempoMeta)], 2,
+                                                                 function(x){
+                                                                   paste(x[!duplicated(x)],sep=" ",collapse=" ")
+                                                                 })
+      tempoMeta<-tempoMeta[-w_dupliValues[[i]][2:length(w_dupliValues[[i]])],]
+    }
+  }
+  (tab_meta<-type.convert(data.frame(t(tempoMeta[,-1])),as.is=T))
+  colnames(tab_meta)<-c(tempoMeta[1:(nrow(tempoMeta)-1),1],"typeCoverage")
+  return(tab_meta)
 }
 ```
+
+## Metadata check
+
+## Metadata check/compare
+
 
 ## Composition data extraction
 
@@ -436,11 +454,6 @@ The order of the operations may be of great importance, so here is the order we 
 
 
 ```{r}
-# TODO:
-# * extract the taxonomic regexes for guessing the taxonomic levels
-# * create an external function for the taxonomic levels guessing
-# * reorganize the steps following the text
-
 # create regex object (external to the functions) for guessing taxonomic levels
 taxo_treatNames_plant<-list(
   regex_lev= c(
@@ -500,6 +513,7 @@ extract_taxParts<- function(taxNames, tax_lev, regex_lev, extractPart)
   {
     sapply(parts,function(x,n,r)sub(r,x,n),n=names,r=regex)
   },list_tax_lev,regex_app,extractPart)
+  res<- vector(mode= "list",length= length(separate))
   for(i in 1:length(separate))
   {
     res[[i]]<-data.frame(id_m= match(list_tax_lev[[i]],taxNames),separate[[i]])
@@ -549,7 +563,7 @@ treatTaxNameXlPhyto<- function(taxNames, lev_regex, exceptions_guessLev, extract
                 releve= sapply(split2Rare, function(x)x[1]),
                 coverage= as.double(sub(",",".",sapply(split2Rare, function(x)x[2])))
                )
-  }
+  }else{rarePres<-list2DF(list(matchTax= NULL, releve= NULL,coverage=NULL))}
   noCase<- which(caseParenth& !grepl(regexParDef, parenthesis)& !caseRegexRare)
   stopifnot(length(noCase)==0)
   # keep as "CF" all what is after cf.
@@ -598,6 +612,7 @@ treatTaxNameXlPhyto<- function(taxNames, lev_regex, exceptions_guessLev, extract
   taxNames[SPP_F]<- sub(regex_spp_final, "\\1", taxNames[SPP_F])
   guessed_lev<- guess_level(taxNames = taxNames,regex_lev = lev_regex,exceptions = exceptions_guessLev)
   taxo_parts<-extract_taxParts(taxNames = taxNames, tax_lev = guessed_lev, regex_lev= lev_regex, extractPart = extract_part)
+  names(taxo_parts)<- names(extract_part)
   return(list(taxs=data.frame(verbatim=sinParenth, taxName=taxNames,guessed_level=guessed_lev),
               taxo_extra=list(
                 cf= data.frame(taxMatch= which(caseCf), verbatimCf= CF[caseCf]),
@@ -610,8 +625,8 @@ treatTaxNameXlPhyto<- function(taxNames, lev_regex, exceptions_guessLev, extract
                 cataRef=data.frame(taxMatch=which(defTax!=""),catalog=defTax[defTax!=""])
                 ),
               rareSpecies=rarePres
-              )
-  )
+               )
+         )
 }
 ```
 
@@ -624,23 +639,30 @@ getCompoPhytoXl<-function(sheet_unMerged, lev_regex, exceptions_guessLev, extrac
   #sheet_unMerged[rows_compo,1]
   rows_onlyRownames<-which(apply(sheet_unMerged,1,function(x)!is.na(x[1])&all(is.na(x[2:length(x)]))))
   rows_oR_compo<-rows_onlyRownames[rows_onlyRownames>lpc_info$line]
-  rows_otrasEspecies<-rows_oR_compo[grepl(" *otras *especies *", sheet_unMerged[rows_oR_compo,1], ignore.case=T)]
+  #rows_otrasEspecies<-rows_oR_compo[grepl(" *otras *especies *", sheet_unMerged[rows_oR_compo,1], ignore.case=T)]
   emptyRows<-which(apply(sheet_unMerged,1,function(x)all(is.na(x))))
-  if(length(rows_otrasEspecies)>1)
-  {warning("More than one line seems to delimit the \"other species\" zone.")
-    rows_otrasEspecies<-line_otrasEspecies[1]
-  }
-  if(length(rows_otrasEspecies)==0)
-  {rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo)&!rows_compo%in%emptyRows]}else{
+  #if(length(rows_otrasEspecies)>1)
+  #{warning("More than one line seems to delimit the \"other species\" zone.")
+  #  rows_otrasEspecies<-line_otrasEspecies[1]
+  #}
+  #if(length(rows_otrasEspecies)==0)
+  #{
+    rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo)&!rows_compo%in%emptyRows]
+  #}else{
   
-  rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo|rows_compo>rows_otrasEspecies)&!rows_compo%in%emptyRows]}
+  #rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo|rows_compo>rows_otrasEspecies)&!rows_compo%in%emptyRows]}
   taxDesc<-sheet_unMerged[rowsTax,1]
   taxo_treated<-treatTaxNameXlPhyto(taxDesc, lev_regex = lev_regex, exceptions_guessLev = exceptions_guessLev, extract_part = extractPart)
+  
+  as.matrix(sheet_unMerged[rowsTax,2:])
 }
 sheet_unMerged<-data_unMerged[[2]][[3]]
 data_unMerged_all<-Reduce(c,data_unMerged)
 Reduce(c,lapply(data_unMerged_all[sapply(data_unMerged_all,function(x)linePhytoCoverage(x)$lineFound)], getCompoPhytoXl))->taxNames
 treatTaxo<- treatTaxNameXlPhyto(taxNames, lev_regex = taxo_treatNames_plant$regex_lev, exceptions_guessLev = taxo_treatNames_plant$exceptions,extract_part = taxo_treatNames_plant$extracPart)
+lev_regex<-taxo_treatNames_plant$regex_lev
+exceptions_guessLev<-taxo_treatNames_plant$exceptions
+extractPart<-taxo_treatNames_plant$extracPart
 ```
 
 
