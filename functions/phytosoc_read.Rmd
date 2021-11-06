@@ -184,6 +184,21 @@ for i in range(len(files_xl)):
 
 ```
 
+# Specs
+
+```r
+purl("./analyseFiles.Rmd")
+```
+
+```{r}
+source("analyseFiles.R")
+dosSpec<-"../inputSpec/"
+fileTabSpec<- paste(dosSpec,"spec_fitoRangelXl_tables.csv",sep="/")
+fileFieldSpec<-paste(dosSpec,"spec_fitoRangelXl_fields.csv",sep="/")
+spec_fito<- read_CsvSpec(fileSpecTab = fileTabSpec, fileSpecField = fileFieldSpec)
+```
+
+
 
 # Exploration of first phytosociological files
 
@@ -259,7 +274,8 @@ linePhytoCoverage<-function(sheetRawData,headRows=15)
   only1Value_head<-sapply(uniqueOnRow_head,length)==1
   regexes_phytoCoverage<-c(areaBasal="^ *[ÁA]rea *basal *(\\(\\%\\))? *$" , cobertura="^ *Cobertura *(\\(%\\))? *$" , coberturaRelativa="^ *Cobertura *relativa *(\\(%\\))? *$")
   #regexes_phytoCoverage<-c(areaBasal="^ *[ÁA]rea *basal *" , cobertura="$ *Cobertura *(\\(%\\))? *$" , coberturaRelativa="$ *Cobertura *relativa *(\\(%\\))? *$")
-  testRegexes<-matrix(Reduce(c,lapply(regexes_phytoCoverage,grepl,uniqueOnRow_head[only1Value_head])),ncol=sum(only1Value_head),nrow=length(regexes_phytoCoverage))
+  # testRegexes: create a matrix, colums correspond to lines with only one value, rows correspond which regex (which type of cover)
+  testRegexes<-matrix(Reduce(c,lapply(regexes_phytoCoverage,grepl,uniqueOnRow_head[only1Value_head])),ncol=sum(only1Value_head),nrow=length(regexes_phytoCoverage),byrow = T)
   w_t<-which(testRegexes,arr.ind = T)
   stopifnot(nrow(w_t)<=1)
   if(nrow(w_t)==1)
@@ -290,41 +306,85 @@ lapply(data_raw,sapply,linePhytoCoverage)
 lapply(data_unMerged,sapply,linePhytoCoverage)
 ```
 
+
+
+
+
+
+
 ## Metadata extraction
 
 ```{r}
 
-getMetadataPhytoXl<-function(sheet_unMerged)# In the future we might need to pass the file and sheet to the function (in order to keep them in the metadata)
-{
-  lpc_info<-linePhytoCoverage(sheet_unMerged)
-  firstLineTitle<-firstCellTitle(sheet_unMerged)
-  if(firstLineTitle){
-    title<-sheet_unMerged[1,1]
-  }else{
-    title<-NULL
-  }
-  if(firstLineTitle)row_meta <- 2:lpc_info$line else row_meta<- 1:lpc_info$line # fix lpc_info$line is 1 too much
-  col_meta<-1:ncol(sheet_unMerged)
-  COLN<-sheet_unMerged[row_meta,1]
-  dupCOLN<-duplicated(COLN)
-  tempoMeta<-sheet_unMerged[row_meta,col_meta]
-  if(length(dupCOLN)>0)
+getMetadataPhytoXl <-
+  function(sheet_unMerged,spec_fito)
+    # In the future we might need to pass the file and sheet to the function (in order to keep them in the metadata)
   {
-    dupliValues<- unique(COLN[duplicated(COLN)])
-    w_dupliValues<-lapply(dupliValues,function(x,coln)which(coln==x),coln=COLN)
-    for(i in 1:length(w_dupliValues))
-    {
-      tempoMeta[w_dupliValues[[i]][1], 2:ncol(tempoMeta)]<-apply(tempoMeta[w_dupliValues[[i]], 2:ncol(tempoMeta)], 2,
-                                                                 function(x){
-                                                                   paste(x[!duplicated(x)],sep=" ",collapse=" ")
-                                                                 })
-      tempoMeta<-tempoMeta[-w_dupliValues[[i]][2:length(w_dupliValues[[i]])],]
+    lpc_info <- linePhytoCoverage(sheet_unMerged)
+    firstLineTitle <- firstCellTitle(sheet_unMerged)
+    if (firstLineTitle) {
+      title <- sheet_unMerged[1, 1]
+    } else{
+      title <- NULL
     }
+    if (firstLineTitle)
+      {row_meta <- 2:lpc_info$line}
+    else
+      {row_meta <- 1:lpc_info$line}
+    emptyRows <- which(apply(sheet_unMerged[row_meta, ], 1, function(x)
+      all(is.na(x) | grepl(
+        "^[[:space:] ]*$", x
+      ))))
+    if (length(emptyRows) > 0) {
+      row_meta <- row_meta[-emptyRows]
+    }
+    col_meta <- 1:ncol(sheet_unMerged)
+    COLN <- sheet_unMerged[row_meta, 1]
+    dupCOLN <- duplicated(COLN)
+    tempoMeta <- sheet_unMerged[row_meta, col_meta]
+    if (sum(dupCOLN) > 0)
+    {
+      dupliValues <- unique(COLN[duplicated(COLN)])
+      w_dupliValues <-
+        lapply(dupliValues, function(x, coln)
+          which(coln == x), coln = COLN)
+      for (i in 1:length(w_dupliValues))
+      {
+        tempoMeta[w_dupliValues[[i]][1], 2:ncol(tempoMeta)] <-
+          apply(tempoMeta[w_dupliValues[[i]], 2:ncol(tempoMeta)], 2,
+                function(x) {
+                  paste(x[!duplicated(x)], sep = " ", collapse = " ")
+                })
+        tempoMeta <-
+          tempoMeta[-w_dupliValues[[i]][2:length(w_dupliValues[[i]])], ]
+      }
+    }
+    (tab_meta <- type.convert(data.frame(t(tempoMeta[, -1])), as.is = T))
+    colnames(tab_meta) <-
+      c(tempoMeta[1:(nrow(tempoMeta) - 1), 1], "typeCoverage")
+    #Recognizing and changing field name
+    tabRecoFi<- data.frame(regex= Reduce(c,spec_fito$recoField), nameFi= rep(names(spec_fito$recoField), sapply(spec_fito$recoField,length)))
+    changeColN_mat<-matrix(Reduce(c,lapply(tabRecoFi$regex, function(r,n)grepl(r,n,ignore.case = T),n=colnames(tab_meta))),
+           nrow=nrow(tabRecoFi),
+           byrow=T)
+    changeColN<-apply(changeColN_mat,2,function(x,n)
+    {
+      w=which(x)
+      if(length(w)==1){return(n[w])}
+      if(length(w)>1){
+        warning("More than one recoField recognise, none selected")
+        return(NA)
+      }
+      if(length(w)==0){return(NA)}
+    },n=tabRecoFi$nameFi)       
+    colnames(tab_meta)[!is.na(changeColN)]<-changeColN[!is.na(changeColN)]
+    tab_meta$typeCoverage <- lpc_info$type
+    return(tab_meta)
   }
-  (tab_meta<-type.convert(data.frame(t(tempoMeta[,-1])),as.is=T))
-  colnames(tab_meta)<-c(tempoMeta[1:(nrow(tempoMeta)-1),1],"typeCoverage")
-  return(tab_meta)
-}
+
+data_unMerged_2 <- Reduce(c, data_unMerged)
+MetaPlot <-
+  lapply(data_unMerged_2[as.logical(sapply(data_unMerged_2, linePhytoCoverage)[1, ])], getMetadataPhytoXl, spec_fito= spec_fito)
 ```
 
 ## Metadata check
@@ -654,12 +714,12 @@ getCompoPhytoXl<-function(sheet_unMerged, lev_regex, exceptions_guessLev, extrac
   taxDesc<-sheet_unMerged[rowsTax,1]
   taxo_treated<-treatTaxNameXlPhyto(taxDesc, lev_regex = lev_regex, exceptions_guessLev = exceptions_guessLev, extract_part = extractPart)
   
-  as.matrix(sheet_unMerged[rowsTax,2:])
+ # as.matrix(sheet_unMerged[rowsTax,2:])
 }
 sheet_unMerged<-data_unMerged[[2]][[3]]
 data_unMerged_all<-Reduce(c,data_unMerged)
-Reduce(c,lapply(data_unMerged_all[sapply(data_unMerged_all,function(x)linePhytoCoverage(x)$lineFound)], getCompoPhytoXl))->taxNames
-treatTaxo<- treatTaxNameXlPhyto(taxNames, lev_regex = taxo_treatNames_plant$regex_lev, exceptions_guessLev = taxo_treatNames_plant$exceptions,extract_part = taxo_treatNames_plant$extracPart)
+#Reduce(c,lapply(data_unMerged_all[sapply(data_unMerged_all,function(x)linePhytoCoverage(x)$lineFound)], getCompoPhytoXl))->taxNames
+#treatTaxo<- treatTaxNameXlPhyto(taxNames, lev_regex = taxo_treatNames_plant$regex_lev, exceptions_guessLev = taxo_treatNames_plant$exceptions,extract_part = taxo_treatNames_plant$extracPart)
 lev_regex<-taxo_treatNames_plant$regex_lev
 exceptions_guessLev<-taxo_treatNames_plant$exceptions
 extractPart<-taxo_treatNames_plant$extracPart

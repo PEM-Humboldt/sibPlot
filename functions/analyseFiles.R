@@ -1,45 +1,16 @@
----
-title: "Analysing file input for the RDS format"
-author: "Marius Bottin"
-date: '`r format(Sys.time(), "%d %B, %Y")`'
-bibliography: "/home/marius/Travail/Bibliotheque/jabref/UNAL.bib"
-csl: "/home/marius/Travail/Bibliotheque/CSL/chicago.csl"
-output: 
-   pdf_document:
-     toc: true
-     toc_depth: 5
-     number_sections: true
-fontsize: 11pt
-geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
-linkcolor: gray
-urlcolor: blue
-citecolor: cyan
-header-includes:
-  - \usepackage{colortbl}
-  - \usepackage{xcolor}       
-  - \usepackage{lscape}
-  - \usepackage{fvextra}
-  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
---- 
-
-```{r, setup}
+## ---- setup-----------------------------------------------------------------------------------------------------------------------------------------
 require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
 opts_chunk$set(cache=F,fig.path="./Fig/",tidy='styler',cache.rebuild = F,formatSQL = TRUE)
 #fileFunctions<-dir("../sib_plot/functions/",pattern=".*\\.R")
 #sapply(fileFunctions,function(x)source(paste("../sib_plot/functions/",x,sep="")))
-```
 
-# Create format specification for later checks
 
-## Reading specification files from Roy
-
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------
 purl("readingFile.Rmd")
 source("readingFile.R")
-```
-Here we extract the specifications from Roy and we made it in a table which we will be able to modify in excel and use directly as an input data for checking compatibility of input files.
 
-```{r, tidy=TRUE,tidy.opts=list(width.cutoff=70)}
+
+## ---- tidy=TRUE,tidy.opts=list(width.cutoff=70)-----------------------------------------------------------------------------------------------------
 roySpec<-xl_sep_table("../../AnalysisDocumentosRoy/RelacionalDAta.xlsx" , sheet="Sheet1")
 names(roySpec)<-sapply(roySpec , function(x) sub("_plotName$","" , colnames(x)[1]))
 for(i in 1:length(roySpec)) { colnames(roySpec[[i]])[1] <- "field"}
@@ -57,13 +28,9 @@ tabRoySpec$regex <- tabRoySpec$maxNum <- tabRoySpec$minNum <- NA
 tabRoySpec[ , c("table" , "field" , "example" , "typeof" , "maxChar" , "regex" , "maxNum" , "minNum")]  %>%
   head(20) %>% kable(booktab=T,caption="Specification of the fields (20 first lines)") %>% kable_styling(font_size=8)
 tabRoySpec_Table<-data.frame(typeTable=unique(tabRoySpec$table),regex=paste0("^",unique(tabRoySpec$table),"$"))
-```
 
-Then we create the Excel file (with only the specifications extracted from Roy's file).
-To specify details in the files, we may copy this file and modify it.
-Then the modified file will be read to apply in test functions.
 
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------
 dosSpec<-"../inputSpec/"
 if(!file.exists(dosSpec))
 {dir.create(dosSpec)}
@@ -78,17 +45,9 @@ if(!file.exists(dosSpec))
 #if(!"spec_csvPermanentBST_Final.xlsx"%in%dir(dosSpec))
 #{saveWorkbook(wb,paste0(dosSpec,"/","spec_csvPermanentBST_Final.xlsx"))}
 
-```
-
-```
-gsub("[“”]","\"",openxlsx::read.xlsx(paste0(dosSpec,"/","spec_csvPermanentBST_Final.xlsx"))[,2])
-```
 
 
-## Reading final specification
-After having modified the final specification in the Excel file, we can read the specification in a function which will create the input format tests.
-
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------
 read_Xlspec<-function(file_spec)
 {
   tb_spec<-openxlsx::read.xlsx(file_spec,sheet = "tableSpec")
@@ -121,19 +80,16 @@ read_CsvSpec<-function(fileSpecTab, fileSpecField, fileSpecExtra=NA)
   }
   return(list(regex_tb= regex_tb, fi_spec= fi_spec, recoField= recoField, regex_fi= regex_fi))
 }
-```
 
-```{r}
+
+## ---------------------------------------------------------------------------------------------------------------------------------------------------
 #specs<-read_Xlspec(paste0(dosSpec,"/","spec_csvPermanentBST_Final.xlsx"))
 specs<- read_CsvSpec(fileSpecTab = paste0(dosSpec,"/","spec_csvPermanentBST_tables.csv"),
                      fileSpecField = paste0(dosSpec,"/","spec_csvPermanentBST_fields.csv"),
                      )
-```
 
 
-# Testing regex
-
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Note: regex spec is a list of 2 levels
 # The names of the first level gives the resulting results (which is the field or table which is compatible)
 # the index of the second level give the specific regex which resulted true
@@ -178,12 +134,9 @@ test_regex<-function(vecChar,vecRegex)
        }))
    }
 }
-```
 
 
-# Checking data input structure in files
-
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Here I will take some examples to work on input data from Roy's code
 
 # I believe it would be a good thing to have first a function which checks files, files types etc
@@ -247,10 +200,9 @@ checkNamesFields<-function(read,categ,listFieldCateg)
 }
 
 #C<-checkNamesFields(read = colRead, categ = an_fi$type_cat, listFieldCateg = listField)
-```
 
 
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------
 names(table(an_fi$plot))[table(an_fi$plot)<5]
 table(an_fi$type_cat)
 #Which plot do not have any census0 (which seems to be basic for me)
@@ -310,4 +262,4 @@ read_metadata<-function(file)
 {
   NA
 }
-```
+

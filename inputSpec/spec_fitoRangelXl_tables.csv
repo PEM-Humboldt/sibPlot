@@ -1,0 +1,4 @@
+typeTable,regex
+metadata,^metadata$
+composition,^compo$
+taxonomy,^taxo$
