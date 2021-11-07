@@ -9,6 +9,8 @@ output:
      toc: true
      toc_depth: 5
      number_sections: true
+     latex_engine: xelatex
+
 fontsize: 11pt
 geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
 linkcolor: gray
@@ -256,6 +258,7 @@ firstCellTitle<-function(sheetRawData)
 lapply(data_unMerged,sapply,firstCellTitle)
 ```
 
+### Line phytoCoverage
 
 This one will check whether there is a line containing only the description of the coverage method and will return:
 
@@ -306,9 +309,18 @@ lapply(data_raw,sapply,linePhytoCoverage)
 lapply(data_unMerged,sapply,linePhytoCoverage)
 ```
 
+### Separation of the other types of sheets
 
+I guess it would be sufficient to check whether other sheets can get extra metadata information.
 
+they should:
 
+* be squared
+* with data which can be attributed to the relevés
+
+Then we just have to put the extra variables to the relevés, and maybe compare the common variables to see where they are more comprehensive...
+
+Some of the data here will be syntaxonomic, so maybe we should compare it to the syntaxonomic information that we got from the composition tables...
 
 
 
@@ -485,7 +497,7 @@ getSquaredBorderRegions<-function(wb,sheet)
 getSquaredBorderRegions(wb,sheet)
 ```
 
-
+### Taxonomía
 
 The following functions will treat the names as given in a Excel file of phytosociology from O. Rangel.
 
@@ -536,7 +548,7 @@ taxo_treatNames_plant<-list(
     gn= "^([A-Z][[:alpha:]-]+)$"
   ),
   exceptions= data.frame(lev=c("fam"),name=c("Leguminosae")),
-  extracPart= list(
+  extractPart= list(
     subsp=c("genus"="\\1","sp_epi"="\\2","subspecies"="\\4"),
     var=c("genus"="\\1","sp_epi"="\\2","variety"="\\4"),
     sp=c("genus"="\\1","sp_epi"="\\2")
@@ -584,8 +596,9 @@ extract_taxParts<- function(taxNames, tax_lev, regex_lev, extractPart)
 
 
 ```{r}
-treatTaxNameXlPhyto<- function(taxNames, lev_regex, exceptions_guessLev, extract_part)
+treatTaxNameXlPhyto<- function(taxNames, taxoIndic)
 {
+  
   # Keeping initial taxNames
   taxNames_init<-taxNames
   # Eliminate irrelevant spaces:
@@ -670,9 +683,11 @@ treatTaxNameXlPhyto<- function(taxNames, lev_regex, exceptions_guessLev, extract
   regex_spp_final<- "^([A-Z][[:alpha:]-]+) spp\\.?$"
   SPP_F<- grepl(regex_spp_final, taxNames)
   taxNames[SPP_F]<- sub(regex_spp_final, "\\1", taxNames[SPP_F])
-  guessed_lev<- guess_level(taxNames = taxNames,regex_lev = lev_regex,exceptions = exceptions_guessLev)
-  taxo_parts<-extract_taxParts(taxNames = taxNames, tax_lev = guessed_lev, regex_lev= lev_regex, extractPart = extract_part)
-  names(taxo_parts)<- names(extract_part)
+  #guessed_lev<- guess_level(taxNames = taxNames,regex_lev = lev_regex,exceptions = exceptions_guessLev)
+  guessed_lev<-do.call(guess_level,args=c(taxNames=list(taxNames),taxoIndic[c("regex_lev","exceptions")]))
+  #taxo_parts<-extract_taxParts(taxNames = taxNames, tax_lev = guessed_lev, regex_lev= lev_regex, extractPart = extract_part)
+  taxo_parts<-do.call(extract_taxParts,c(list(taxNames=taxNames, tax_lev= guessed_lev),taxoIndic[c("regex_lev","extractPart")]))
+  names(taxo_parts)<- names(taxoIndic$extractPart)
   return(list(taxs=data.frame(verbatim=sinParenth, taxName=taxNames,guessed_level=guessed_lev),
               taxo_extra=list(
                 cf= data.frame(taxMatch= which(caseCf), verbatimCf= CF[caseCf]),
@@ -685,38 +700,163 @@ treatTaxNameXlPhyto<- function(taxNames, lev_regex, exceptions_guessLev, extract
                 cataRef=data.frame(taxMatch=which(defTax!=""),catalog=defTax[defTax!=""])
                 ),
               rareSpecies=rarePres
-               )
+              )
          )
 }
 ```
 
+```{r}
+getTaxonomyXlFito<- function(treated_taxo)# Here we are considering that the susbspecific levels we'll get are variety and subspecies (which make sense), but we might get forms and subforms in the future?
+{
+  taxonomy<- treated_taxo$taxs
+  taxonomy$sup_gn<- NA
+  taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$subsp$id_m]<- treated_taxo$taxo_extra$taxParts$subsp$genus
+  taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$var$id_m]<- treated_taxo$taxo_extra$taxParts$var$genus
+  taxonomy$sup_gn[taxo_treated$taxo_extra$taxParts$sp$id_m]<- taxo_treated$taxo_extra$taxParts$sp$genus
+  taxonomy$sup_sp<- NA
+  taxonomy$sup_sp[treated_taxo$taxo_extra$taxParts$subsp$id_m]<- apply(treated_taxo$taxo_extra$taxParts$subsp[,2:3], 1, paste, collapse=" ")
+  taxonomy$sup_sp[treated_taxo$taxo_extra$taxParts$var$id_m]<- apply(treated_taxo$taxo_extra$taxParts$var[,2:3], 1, paste, collapse= " ")
+  taxonomy$catalog<- NA
+  taxonomy$catalog[treated_taxo$taxo_extra$cataRef$taxMatch]<- treated_taxo$taxo_extra$cataRef$catalog
+  return(taxonomy)
+}
+```
+
+
+
+
+### Composición
+
+
+The function mat2dbTab takes a matrix and pass it to a database format, which every lines being the association of a column (species) and a row (sampling unit) of the original matrix.
+
+It has 2 levels:
+
+* filledNumeric: the original matrix is a nice numeric matrix filled with 0 where the species is absent
+* !filledNumeric: the original matrix is a dirty matrix with all kind of bad formatted text inside
+
 
 ```{r}
-getCompoPhytoXl<-function(sheet_unMerged, lev_regex, exceptions_guessLev, extractPart)
+mat2dbTab <-
+function(mat, checklist= F, filledNumeric= is.numeric(mat), nameRow="releve", nameCol="taxon", nameQuantityCol="cover")
+{
+  if(filledNumeric)
+  {W<- which(!is.na(mat)&mat>0,arr.ind<-T)
+  }else{
+  W<- which(!is.na(mat)&mat!=""&!grepl("^[[:space:] ]*$",mat),arr.ind = T)
+  }
+	if(!checklist){
+  dbTab<-data.frame(rownames(mat)[W[,"row"]], colnames(mat)[W[,"col"]], mat[W])
+  colnames(dbTab)<-c(nameRow,nameCol,nameQuantityCol)
+	}else{
+  dbTab<-data.frame(rownames(mat)[W[,"row"]], colnames(mat)[W[,"col"]])
+  colnames(dbTab)<-c(nameRow,nameCol)
+	}
+	numSU<-all(grepl("^[0-9]+$",dbTab[,1]))
+	if(numSU){dbTab[,1]<-as.numeric(as.character(dbTab[,1]))}
+  dbTab<-dbTab[order(dbTab[,1],dbTab[,2]),]
+  return(utils::type.convert(dbTab,as.is=T))
+}
+```
+
+Now we make the function that will extract all the data from the composition part of the sheets.
+
+As arguments it takes:
+
+* sheet_unMerged: the raw data extracted from the excel file after having unmerged merged cells
+* wb: the read workbook in openxlsx format, the idea is to get all the formatting from there to be able to extract the squares
+* sheetName, well, the sheet name!
+* releves: the names of the relevés, in the same order as the column of the sheet, extracted from the metadata
+* typeCover: the types of cover
+* taxoIndic: the taxonomic rules to guess the levels of the taxa, the different parts of taxonomic denomination etc.
+
+As values, it returns:
+
+* the composition in a database format
+* the taxonomy information as a table
+* the syntaxonomy information as 2 tables:
+  + the relevés included in the syntaxa
+  + the characteristic species for each syntaxon
+
+```{r}
+getCompoPhytoXl<-function(sheet_unMerged, wb, sheetName, releves, typeCover, taxoIndic)
 {
   lpc_info<-linePhytoCoverage(sheet_unMerged)
+  stopifnot(length(releves)==(ncol(sheet_unMerged)-1))
   rows_compo<-(lpc_info$line+1):nrow(sheet_unMerged)
   #sheet_unMerged[rows_compo,1]
   rows_onlyRownames<-which(apply(sheet_unMerged,1,function(x)!is.na(x[1])&all(is.na(x[2:length(x)]))))
   rows_oR_compo<-rows_onlyRownames[rows_onlyRownames>lpc_info$line]
-  #rows_otrasEspecies<-rows_oR_compo[grepl(" *otras *especies *", sheet_unMerged[rows_oR_compo,1], ignore.case=T)]
+  rows_otrasEspecies<-rows_oR_compo[grepl(" *otras *especies *", sheet_unMerged[rows_oR_compo,1], ignore.case=T)]
+  if(length(rows_otrasEspecies)>1)
+  {warning("More than one line seems to delimit the \"other species\" zone.")}
   emptyRows<-which(apply(sheet_unMerged,1,function(x)all(is.na(x))))
-  #if(length(rows_otrasEspecies)>1)
-  #{warning("More than one line seems to delimit the \"other species\" zone.")
-  #  rows_otrasEspecies<-line_otrasEspecies[1]
-  #}
-  #if(length(rows_otrasEspecies)==0)
-  #{
-    rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo)&!rows_compo%in%emptyRows]
-  #}else{
-  
-  #rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo|rows_compo>rows_otrasEspecies)&!rows_compo%in%emptyRows]}
+  rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo)&!rows_compo%in%emptyRows]
+  if(length(rows_otrasEspecies)==1)
+  {rowsTax<-c(rowsTax,rows_compo[rows_compo>rows_otrasEspecies&!(rows_compo%in%emptyRows)])}
   taxDesc<-sheet_unMerged[rowsTax,1]
-  taxo_treated<-treatTaxNameXlPhyto(taxDesc, lev_regex = lev_regex, exceptions_guessLev = exceptions_guessLev, extract_part = extractPart)
+  taxo_treated<-treatTaxNameXlPhyto(taxDesc, taxoIndic = taxoIndic)
+  mat_compo<- t(as.matrix(sheet_unMerged[rowsTax,2:ncol(sheet_unMerged)]))
+  dimnames(mat_compo)=list(releves,taxo_treated$taxs$verbatim)
+  compo<-mat2dbTab(mat_compo, nameQuantityCol = typeCover)
+  if(nrow(taxo_treated$rareSpecies)>1)
+  {
+    extraTab<-data.frame(
+                    taxo_treated$rareSpecies$releve,  
+                    taxo_treated$taxs$verbatim [taxo_treated$rareSpecies$matchTax],
+                    taxo_treated$rareSpecies$coverage
+                    )
+    colnames(extraTab)<- colnames(compo)
+    compo<-rbind(compo,extraTab)
+  }
+  if(!is.numeric(compo[,3]))
+  {
+    compo[,3]<-sub(",",".",compo[,3])
+    compo[,3][compo[,3]=="."|compo[,3]=="·"]<-NA
+    compo<-utils::type.convert(compo)
+  }
+  # squares
+  squares<-getSquaredBorderRegions(wb,sheetName)
+  if(nrow(squares)>1)
+  {
+    m_sq_oR<-match(squares$topleft.y-1,rows_oR_compo)
+    squares$syntaxGroups<-NA
+    squares$syntaxGroups[na.omit(m_sq_oR)]<-sheet_unMerged[rows_oR_compo[na.omit(m_sq_oR)],1]
+    squares<-squares[!is.na(squares$syntaxGroups),]
+    sp_carac<- apply(squares,1,function(x,rt,sp)sp[which(rt%in%(x[2]:x[4]))],
+          rt=rowsTax,sp=taxo_treated$taxs$verbatim)
+    rel_synt<- apply(squares,1,function(x,c,rel)rel[which(c%in%(x[1]:x[3]))],
+          c=2:ncol(sheet_unMerged),rel=releves)
+    syntax<-list(
+      sp_carac<-data.frame(
+        syntaxon= rep(squares$syntaxGroups, sapply(sp_carac,length)),
+        sp_carac=Reduce(c,sp_carac)),
+      rel_synt<-data.frame(
+        syntaxon= rep(squares$syntaxGroups, sapply(rel_synt,length)),
+        releve=Reduce(c,rel_synt)
+      )
+    )
+  }
+  res<-list(compo=compo,
+            taxonomy=getTaxonomyXlFito(taxo_treated)
+            )
+  if("syntax"%in%ls(envir = as.environment(-1L)))
+  {res<-c(res, syntax=list(syntax))}
+  return(res)
   
- # as.matrix(sheet_unMerged[rowsTax,2:])
 }
+```
+
+
+```r
+taxoIndic<- taxo_treatNames_plant
 sheet_unMerged<-data_unMerged[[2]][[3]]
+wb<- loadWorkbook(dos_files[2])
+meta_sheet<- getMetadataPhytoXl(sheet_unMerged,spec_fito)
+releves<- meta_sheet$levantamiento
+typeCover<-meta_sheet$typeCoverage[1]
+data_from_compo<- getCompoPhytoXl(sheet_unMerged, wb, "Tabla 33", releves, typeCover, taxoIndic)
+sheetName<- names(wb)[3]
 data_unMerged_all<-Reduce(c,data_unMerged)
 #Reduce(c,lapply(data_unMerged_all[sapply(data_unMerged_all,function(x)linePhytoCoverage(x)$lineFound)], getCompoPhytoXl))->taxNames
 #treatTaxo<- treatTaxNameXlPhyto(taxNames, lev_regex = taxo_treatNames_plant$regex_lev, exceptions_guessLev = taxo_treatNames_plant$exceptions,extract_part = taxo_treatNames_plant$extracPart)
@@ -724,5 +864,18 @@ lev_regex<-taxo_treatNames_plant$regex_lev
 exceptions_guessLev<-taxo_treatNames_plant$exceptions
 extractPart<-taxo_treatNames_plant$extracPart
 ```
+
+# Going automatic!
+
+## Pre-formatting files
+
+It might be good to apply some pre-formatting to the files:
+
+1. merge various files that may have information on common plot, or that we would like to keep as a group
+1. basic formatting from Excel files (unMerging etc.). Here I do not think that writing an unMerged file would be useful anymore
+1. recognize the type of information included in the sheets
+1. separate different informations from the sheets (metadata/composition/taxonomy/syntaxonomy)
+1. get the preformatted files in a R list, but allowing to write an excel file as well
+
 
 
