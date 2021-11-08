@@ -63,7 +63,7 @@ read_Xlspec<-function(file_spec)
   }
   return(list(regex_tb=regex_tb,fi_spec=fi_spec,regex_fi=regex_fi))
 }
-read_CsvSpec<-function(fileSpecTab, fileSpecField, fileSpecExtra=NA)
+read_CsvSpec<-function(fileSpecTab, fileSpecField, fileSpecExtra=NA, fileSpecPrefor=NA)
 {
   tb_spec<-read.csv(fileSpecTab)
   regex_tb<-strsplit(tb_spec$regex,";")
@@ -78,14 +78,23 @@ read_CsvSpec<-function(fileSpecTab, fileSpecField, fileSpecExtra=NA)
   {
     stop(paste("In the field specs we found the following tables:", paste(unique(fi_spec$table[which(!fi_spec$table%in%tb_spec$typeTable)]),collapse=", "),"which ARE NOT DEFINED in the table specs",sep="\n"))
   }
-  return(list(regex_tb= regex_tb, fi_spec= fi_spec, recoField= recoField, regex_fi= regex_fi))
+  
+  pf_spec<-NULL
+  if(!is.na(fileSpecPrefor))
+  {
+    tb_pf <- read.csv(fileSpecPrefor)
+    recoField_pf<- strsplit(tb_pf$recoField[!is.na(tb_pf$recoField)&!tb_pf$recoField==""],";")
+    names(recoField_pf)<- tb_pf$field[!is.na(tb_pf$recoField)&!tb_pf$recoField==""]
+    pf_spec<- list(tb_pf=tb_pf, recoField_pf= recoField_pf)
+  }
+  return(list(regex_tb= regex_tb, fi_spec= fi_spec, recoField= recoField, regex_fi= regex_fi, pf_spec=pf_spec))
 }
 
 
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------
 #specs<-read_Xlspec(paste0(dosSpec,"/","spec_csvPermanentBST_Final.xlsx"))
 specs<- read_CsvSpec(fileSpecTab = paste0(dosSpec,"/","spec_csvPermanentBST_tables.csv"),
-                     fileSpecField = paste0(dosSpec,"/","spec_csvPermanentBST_fields.csv"),
+                     fileSpecField = paste0(dosSpec,"/","spec_csvPermanentBST_fields.csv")
                      )
 
 

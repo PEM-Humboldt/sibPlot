@@ -197,7 +197,8 @@ source("analyseFiles.R")
 dosSpec<-"../inputSpec/"
 fileTabSpec<- paste(dosSpec,"spec_fitoRangelXl_tables.csv",sep="/")
 fileFieldSpec<-paste(dosSpec,"spec_fitoRangelXl_fields.csv",sep="/")
-spec_fito<- read_CsvSpec(fileSpecTab = fileTabSpec, fileSpecField = fileFieldSpec)
+filePreforSpec<-paste(dosSpec,"spec_fitoRangelXl_prefor.csv",sep="/")
+spec_fito<- read_CsvSpec(fileSpecTab = fileTabSpec, fileSpecField = fileFieldSpec, fileSpecPrefor = filePreforSpec)
 ```
 
 
@@ -375,7 +376,7 @@ getMetadataPhytoXl <-
     colnames(tab_meta) <-
       c(tempoMeta[1:(nrow(tempoMeta) - 1), 1], "typeCoverage")
     #Recognizing and changing field name
-    tabRecoFi<- data.frame(regex= Reduce(c,spec_fito$recoField), nameFi= rep(names(spec_fito$recoField), sapply(spec_fito$recoField,length)))
+    tabRecoFi<- data.frame(regex= Reduce(c,spec_fito$pf_spec$recoField_pf), nameFi= rep(names(spec_fito$pf_spec$recoField_pf), sapply(spec_fito$pf_spec$recoField_pf,length)))
     changeColN_mat<-matrix(Reduce(c,lapply(tabRecoFi$regex, function(r,n)grepl(r,n,ignore.case = T),n=colnames(tab_meta))),
            nrow=nrow(tabRecoFi),
            byrow=T)
