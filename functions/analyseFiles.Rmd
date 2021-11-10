@@ -126,6 +126,7 @@ read_CsvSpec<-function(fileSpecTab, fileSpecField, fileSpecExtra=NA, fileSpecPre
     tb_pf <- read.csv(fileSpecPrefor)
     recoField_pf<- strsplit(tb_pf$recoField[!is.na(tb_pf$recoField)&!tb_pf$recoField==""],";")
     names(recoField_pf)<- tb_pf$field[!is.na(tb_pf$recoField)&!tb_pf$recoField==""]
+    recoField_pf<-tapply(recoField_pf,tb_pf$table[!is.na(tb_pf$recoField)&!tb_pf$recoField==""],function(x)x,simplify = F)
     pf_spec<- list(tb_pf=tb_pf, recoField_pf= recoField_pf)
   }
   return(list(regex_tb= regex_tb, fi_spec= fi_spec, recoField= recoField, regex_fi= regex_fi, pf_spec=pf_spec))
@@ -148,7 +149,7 @@ specs<- read_CsvSpec(fileSpecTab = paste0(dosSpec,"/","spec_csvPermanentBST_tabl
 # the index of the second level give the specific regex which resulted true
 # The function checks whether there is only one regex being true (error if not)
 # and then send a table with the regex which works if any and the index in the regex group
-test_regex_multi<-function(vecChar,regex_spec)
+test_regex_multi<-function(vecChar,regex_spec,...)
 {
   mat_res<-matrix(NA,nrow=length(vecChar),ncol=sum(sapply(regex_spec,length)))
   counter<-0
@@ -158,7 +159,7 @@ test_regex_multi<-function(vecChar,regex_spec)
   {for(j in 1:length(regex_spec[[i]]))
     {
       counter<-counter+1
-      mat_res[,counter]<-grepl(regex_spec[[i]][j],vecChar)
+      mat_res[,counter]<-grepl(regex_spec[[i]][j],vecChar,...)
     }
   }
   if(any(rowSums(mat_res)>1))
@@ -167,16 +168,17 @@ test_regex_multi<-function(vecChar,regex_spec)
     #st_more1<-which(rowSums(mat_res)>1)
     #tabError<-paste(vecChar[st_more1],":",paste(ok[which(mat_res[st_more1])],nb[which(mat_res[st_more1])],sep=" ",collapse = " "),collapse="\n")
     #stop(paste("More than one regex was found true for the following strings:\n",tabError))
-    stop()
+    stop("More than one regex corresponded for one of the string")
   }else{
-    return(data.frame(testedString=vecChar,ok=ok[apply(mat_res,1,which)],nb=nb[apply(mat_res,1,which)]))
+    got<- apply(mat_res,1,function(x)ifelse(sum(x)==0,NA,which(x)))
+    return(data.frame(testedString=as.character(vecChar),ok=ok[got],nb=nb[got]))
   }
 }
-test_regex<-function(vecChar,vecRegex)
+test_regex<-function(vecChar,vecRegex,...)
 {
   mat_res<-matrix(nrow=length(vecChar),ncol=length(vecRegex))
   for(i in 1:length(vecRegex))
-  {mat_res[,i]<-grepl(vecRegex[i],vecChar)}
+  {mat_res[,i]<-grepl(vecRegex[i],vecChar,...)}
    if(any(rowSums(mat_res)>1))
   {
     stop()# To do: make stop message

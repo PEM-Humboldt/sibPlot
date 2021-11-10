@@ -85,6 +85,7 @@ read_CsvSpec<-function(fileSpecTab, fileSpecField, fileSpecExtra=NA, fileSpecPre
     tb_pf <- read.csv(fileSpecPrefor)
     recoField_pf<- strsplit(tb_pf$recoField[!is.na(tb_pf$recoField)&!tb_pf$recoField==""],";")
     names(recoField_pf)<- tb_pf$field[!is.na(tb_pf$recoField)&!tb_pf$recoField==""]
+    recoField_pf<-tapply(recoField_pf,tb_pf$table[!is.na(tb_pf$recoField)&!tb_pf$recoField==""],function(x)x,simplify = F)
     pf_spec<- list(tb_pf=tb_pf, recoField_pf= recoField_pf)
   }
   return(list(regex_tb= regex_tb, fi_spec= fi_spec, recoField= recoField, regex_fi= regex_fi, pf_spec=pf_spec))

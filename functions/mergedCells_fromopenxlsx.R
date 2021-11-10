@@ -167,9 +167,9 @@ xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_
 {
   stopifnot(length(fileXl)==1)
   regex_file<-"(.*)\\.xlsx$"
+  fileXl_base<-basename(fileXl)
   if(writeFile)
   {
-    fileXl_base<-basename(fileXl)
     dos_ori<-dirname(fileXl)
     if(is.na(dos_unMerged))
     {

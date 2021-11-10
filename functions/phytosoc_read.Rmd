@@ -187,13 +187,24 @@ for i in range(len(files_xl)):
 ```
 
 # Specs
+```{r}
+source_rmd <- function(file, local = FALSE, ...){
+  options(knitr.duplicate.label = 'allow')
+  tempR <- tempfile(tmpdir = ".", fileext = ".R")
+  on.exit(unlink(tempR))
+  knitr::purl(file, output=tempR, quiet = TRUE)
+  envir <- globalenv()
+  source(tempR, local = envir, ...)
+}
+```
+
 
 ```r
 purl("./analyseFiles.Rmd")
 ```
 
 ```{r}
-source("analyseFiles.R")
+source_rmd("analyseFiles.Rmd")
 dosSpec<-"../inputSpec/"
 fileTabSpec<- paste(dosSpec,"spec_fitoRangelXl_tables.csv",sep="/")
 fileFieldSpec<-paste(dosSpec,"spec_fitoRangelXl_fields.csv",sep="/")
@@ -323,6 +334,27 @@ Then we just have to put the extra variables to the relevés, and maybe compare 
 
 Some of the data here will be syntaxonomic, so maybe we should compare it to the syntaxonomic information that we got from the composition tables...
 
+```{r}
+recog_type_fitoRangel<-function(unMerged_sheet, spec_fito)
+{
+  lpc_info<- linePhytoCoverage(unMerged_sheet)
+  if(lpc_info$lineFound)
+  {return("levantamiento")
+  }else{
+    fct<- firstCellTitle(unMerged_sheet)
+    lineHeader<- which(apply(unMerged_sheet,1,function(x)!any(is.na(x))))[1]
+    cn<-as.character(unMerged_sheet[lineHeader,])
+    recoCn<- test_regex_multi(vecChar = cn, regex_spec = spec_fito$pf_spec$recoField_pf$meta_extra,ignore.case=T)
+    propReco<- sum(!is.na(recoCn$ok))/nrow(recoCn)
+    has.lev<-any(recoCn$ok=="levantamiento")
+    if(propReco<.5|!has.lev)
+    {
+      return("unrecognized")
+    }
+    return("meta_extra")
+  }
+}
+```
 
 
 ## Metadata extraction
@@ -341,8 +373,7 @@ getMetadataPhytoXl <-
       title <- NULL
     }
     if (firstLineTitle)
-      {row_meta <- 2:lpc_info$line}
-    else
+      {row_meta <- 2:lpc_info$line}else
       {row_meta <- 1:lpc_info$line}
     emptyRows <- which(apply(sheet_unMerged[row_meta, ], 1, function(x)
       all(is.na(x) | grepl(
@@ -376,7 +407,9 @@ getMetadataPhytoXl <-
     colnames(tab_meta) <-
       c(tempoMeta[1:(nrow(tempoMeta) - 1), 1], "typeCoverage")
     #Recognizing and changing field name
-    tabRecoFi<- data.frame(regex= Reduce(c,spec_fito$pf_spec$recoField_pf), nameFi= rep(names(spec_fito$pf_spec$recoField_pf), sapply(spec_fito$pf_spec$recoField_pf,length)))
+    metadataRecoFi<- spec_fito$pf_spec$recoField_pf$metadata
+    tabRecoFi<- data.frame(regex= Reduce(c,metadataRecoFi),
+                           nameFi= rep(names(metadataRecoFi), sapply(metadataRecoFi,length)))
     changeColN_mat<-matrix(Reduce(c,lapply(tabRecoFi$regex, function(r,n)grepl(r,n,ignore.case = T),n=colnames(tab_meta))),
            nrow=nrow(tabRecoFi),
            byrow=T)
@@ -399,6 +432,9 @@ data_unMerged_2 <- Reduce(c, data_unMerged)
 MetaPlot <-
   lapply(data_unMerged_2[as.logical(sapply(data_unMerged_2, linePhytoCoverage)[1, ])], getMetadataPhytoXl, spec_fito= spec_fito)
 ```
+
+
+
 
 ## Metadata check
 
@@ -707,13 +743,14 @@ treatTaxNameXlPhyto<- function(taxNames, taxoIndic)
 ```
 
 ```{r}
-getTaxonomyXlFito<- function(treated_taxo)# Here we are considering that the susbspecific levels we'll get are variety and subspecies (which make sense), but we might get forms and subforms in the future?
+# Here we are considering that the susbspecific levels we'll get are variety and subspecies (which make sense), but we might get forms and subforms in the future?
+getTaxonomyXlFito<- function(treated_taxo)
 {
   taxonomy<- treated_taxo$taxs
   taxonomy$sup_gn<- NA
   taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$subsp$id_m]<- treated_taxo$taxo_extra$taxParts$subsp$genus
   taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$var$id_m]<- treated_taxo$taxo_extra$taxParts$var$genus
-  taxonomy$sup_gn[taxo_treated$taxo_extra$taxParts$sp$id_m]<- taxo_treated$taxo_extra$taxParts$sp$genus
+  taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$sp$id_m]<- treated_taxo$taxo_extra$taxParts$sp$genus
   taxonomy$sup_sp<- NA
   taxonomy$sup_sp[treated_taxo$taxo_extra$taxParts$subsp$id_m]<- apply(treated_taxo$taxo_extra$taxParts$subsp[,2:3], 1, paste, collapse=" ")
   taxonomy$sup_sp[treated_taxo$taxo_extra$taxParts$var$id_m]<- apply(treated_taxo$taxo_extra$taxParts$var[,2:3], 1, paste, collapse= " ")
@@ -813,34 +850,34 @@ getCompoPhytoXl<-function(sheet_unMerged, wb, sheetName, releves, typeCover, tax
   if(!is.numeric(compo[,3]))
   {
     compo[,3]<-sub(",",".",compo[,3])
-    compo[,3][compo[,3]=="."|compo[,3]=="·"]<-NA
+    compo[,3][grepl("^[[:space:] ]*[-\\.·] ?$",compo[,3])]<-NA
     compo<-utils::type.convert(compo)
   }
   # squares
   squares<-getSquaredBorderRegions(wb,sheetName)
-  if(nrow(squares)>1)
+  if(nrow(squares)>=1)
   {
     m_sq_oR<-match(squares$topleft.y-1,rows_oR_compo)
     squares$syntaxGroups<-NA
-    squares$syntaxGroups[na.omit(m_sq_oR)]<-sheet_unMerged[rows_oR_compo[na.omit(m_sq_oR)],1]
+    squares[!is.na(m_sq_oR),"syntaxGroups"]<-sheet_unMerged[rows_oR_compo[m_sq_oR[!is.na(m_sq_oR)]],1]
     squares<-squares[!is.na(squares$syntaxGroups),]
     sp_carac<- apply(squares,1,function(x,rt,sp)sp[which(rt%in%(x[2]:x[4]))],
           rt=rowsTax,sp=taxo_treated$taxs$verbatim)
     rel_synt<- apply(squares,1,function(x,c,rel)rel[which(c%in%(x[1]:x[3]))],
           c=2:ncol(sheet_unMerged),rel=releves)
+    if(is.matrix(sp_carac)){sp_carac<-as.list(as.data.frame(sp_carac))}
+    if(is.matrix(rel_synt)){rel_synt<-as.list(as.data.frame(rel_synt))}
     syntax<-list(
-      sp_carac<-data.frame(
+      sp_carac= data.frame(
         syntaxon= rep(squares$syntaxGroups, sapply(sp_carac,length)),
         sp_carac=Reduce(c,sp_carac)),
-      rel_synt<-data.frame(
+      rel_synt= data.frame(
         syntaxon= rep(squares$syntaxGroups, sapply(rel_synt,length)),
         releve=Reduce(c,rel_synt)
       )
     )
   }
-  res<-list(compo=compo,
-            taxonomy=getTaxonomyXlFito(taxo_treated)
-            )
+  res<-list(compo=compo,taxonomy=getTaxonomyXlFito(taxo_treated))
   if("syntax"%in%ls(envir = as.environment(-1L)))
   {res<-c(res, syntax=list(syntax))}
   return(res)
@@ -877,6 +914,74 @@ It might be good to apply some pre-formatting to the files:
 1. recognize the type of information included in the sheets
 1. separate different informations from the sheets (metadata/composition/taxonomy/syntaxonomy)
 1. get the preformatted files in a R list, but allowing to write an excel file as well
+
+
+### Merging files
+
+It appears that merging the files and keeping their formatting is much more complicated than expected.
+Some clues about how to do that with with *openxlsx* are to be found in the function cloneWorksheet, which allows to clone a worksheet in the same workbook, but this function calls for a method which can be found as [name_of_workbook]$cloneWoksheet
+Not that it might be imperative to copy the styles in the worksheet first.
+
+Anyway, for now, there is no simple solution for now, so what we need to do is to keep the various Workbook objects and to get the data (unMerged and/or raw) in lists that are with depth one, or to keep an object referencing the other ones...
+
+```r
+concatXl<- function(files, getWorkbook=T, fileConcat=NA)
+{
+  listWb<- lapply(files, openxlsx::loadWorkbook)
+  wb<-createWorkbook()
+  sheets<-Reduce(c,sapply(listWb,names))
+  for(i in sheets){addWorksheet(wb)}
+  
+  
+}
+```
+
+```{r}
+preformat_extractRecognize_XlFitoRangel<-function(files)
+{
+  unMerged<-Reduce(c,lapply(files,FUN = xl_fillMerged,getWorkbook=F,writeFile=F))
+  workBooks<-lapply(files,FUN = loadWorkbook)
+  infoFilesSheets<-data.frame(nameSheet=Reduce(c, sapply(workBooks,names)),
+                              file=rep(basename(files), sapply(workBooks, function(x)length(names(x)))),
+                              path=rep(dirname(files), sapply(workBooks, function(x)length(names(x))))
+                              )
+  if(any(duplicated(infoFilesSheets$nameSheet)))
+  {
+    stop("Duplication of the following sheet names:",
+         paste("\"",infoFilesSheets$nameSheet[duplicated(infoFilesSheets$nameSheet)], "\"",collapse= ","), "\nPlease change the names of the sheets in your excel files for them to be unique in the group of files")
+  }
+  infoFilesSheets$type<- sapply(unMerged,recog_type_fitoRangel,spec_fito)
+  res<-list(unMerged= unMerged, wbs= workBooks,info= infoFilesSheets)
+  names(res$wbs)<-basename(files)
+  return(res)
+}
+filesToPreformat<-paste0("../../docFito/",c("Arreglo PERIJA HUMBOLDT (1).xlsx" , "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", "vegetacion paramo perija (1).xlsx"))
+fitoRangelPerija<- preformat_extractRecognize_XlFitoRangel(filesToPreformat)
+fitoRangelPerija$info
+```
+
+```{r}
+format_lev_XlFitoRangel<-function(extractedInfo, spec_fito, taxoIndic)
+{
+  n_levantamientos<- extractedInfo$info$nameSheet[extractedInfo$info$type=="levantamiento"]
+  metadatas<- lapply(extractedInfo$unMerged[n_levantamientos],getMetadataPhytoXl,spec_fito)
+  metadata<-Reduce(function(tab1,tab2)merge(tab1,tab2,all=T),metadatas)
+  compo_etc<- mapply(getCompoPhytoXl,
+                     extractedInfo$unMerged[extractedInfo$info$type=="levantamiento"],
+                     rep(extractedInfo$wbs,sapply(extractedInfo$wbs,function(x)length(names(x))))[extractedInfo$info$type=="levantamiento"],
+                     extractedInfo$info$nameSheet[extractedInfo$info$type=="levantamiento"],
+                     sapply(metadatas,function(x)x$levantamiento),
+                     sapply(metadatas,function(x)x$typeCover[1]),
+                     MoreArgs = list(taxoIndic=taxoIndic)
+                     )
+  
+}
+fitoRangelPerija-> extractedInfo
+taxoIndic<-taxo_treatNames_plant
+```
+
+
+
 
 
 
