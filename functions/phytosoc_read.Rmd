@@ -26,7 +26,13 @@ header-includes:
 
 ```{r, setup}
 require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
-opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.rebuild = F,formatSQL = TRUE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
+options(knitr.kable.NA = '---')
 #fileFunctions<-dir("../sib_plot/functions/",pattern=".*\\.R")
 #sapply(fileFunctions,function(x)source(paste("../sib_plot/functions/",x,sep="")))
 ```
@@ -181,12 +187,10 @@ for i in range(len(files_xl)):
   merged = sheet_ranges.merged_cells.ranges
   for j in range(len(merged))
     txtFile.write(merged[j])
-
-
-
 ```
 
 # Specs
+
 ```{r}
 source_rmd <- function(file, local = FALSE, ...){
   options(knitr.duplicate.label = 'allow')
@@ -220,8 +224,9 @@ spec_fito<- read_CsvSpec(fileSpecTab = fileTabSpec, fileSpecField = fileFieldSpe
 
 ```{r}
 dos<-"../../docFito/"
-files<-dir(dos,recursive = T,pattern="\\.xlsx$")
+files<-dir(dos,recursive = T,pattern="\\.xlsx$",)
 files<-files[!grepl("_unmerged",files)]
+files<-files[!grepl("preformatted",files)]
 dos_files<-paste(dos,files,sep="/")
 ```
 
@@ -252,15 +257,8 @@ En los archivos enviados por O. Rangel, hay diferentes tipos de datos:
 4. tabla de levantamiento (ver "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", sheet 3 a n y los sheet de "vegetacion paramo perija (1).xlsx"). Esas tablas están en 2 partes: una parte de descripción de levantamiento, y una parte dando la composición de los levantamientos. Podríamos basarnos en varios criterios para determinar si estamos en este tipo de datos, pero uno de los más practico podría ser basarse en la mención de Área basal, Cobertura o cobertura relativa: este corresponde a una celda "merged", que toma toda una linea (a veces sin la primera celda de la linea)
 
 
-
-
-
-
-```{r}
-lapply(data_unMerged,sapply,function(x)x[1,1])
-```
-
 This function will check whether the first cell of the sheet contains some description of the table
+
 ```{r}
 firstCellTitle<-function(sheetRawData)
 {
@@ -433,12 +431,31 @@ MetaPlot <-
   lapply(data_unMerged_2[as.logical(sapply(data_unMerged_2, linePhytoCoverage)[1, ])], getMetadataPhytoXl, spec_fito= spec_fito)
 ```
 
+### Extra information in extrameta tables
+
+```{r}
+extra_meta_read<-function(uM_sheet,spec_fito){
+  fct<- firstCellTitle(uM_sheet)
+  lineHeader<- which(apply(uM_sheet,1,function(x)!any(is.na(x))))[1]
+  cn<-as.character(uM_sheet[lineHeader,])
+  recoCn<- test_regex_multi(vecChar = cn, regex_spec = spec_fito$pf_spec$recoField_pf$meta_extra,ignore.case=T)
+  tab<- uM_sheet[lineHeader+1:nrow(uM_sheet),]
+  colnames(tab)[!is.na(recoCn$ok)]<- recoCn$ok[!is.na(recoCn$ok)]
+  colnames(tab)[is.na(recoCn$ok)]<- recoCn$testedString[is.na(recoCn$ok)]
+  return(tab)
+}
+```
+
+```{r}
+compare_releve_extrameta_Xlfito<- function(extrameta,tab_metadata)
+{
+  lev_em<-as.character(extrameta$levantamiento)
+  lev_meta<-as.character(tab_metadata$levantamiento)
+  return(lev_em%in%lev_meta)
+}
+```
 
 
-
-## Metadata check
-
-## Metadata check/compare
 
 
 ## Composition data extraction
@@ -531,7 +548,9 @@ getSquaredBorderRegions<-function(wb,sheet)
   return(res)
 }
 
-getSquaredBorderRegions(wb,sheet)
+kable(
+  getSquaredBorderRegions(wb,sheet),
+  booktab=T)
 ```
 
 ### Taxonomía
@@ -850,8 +869,9 @@ getCompoPhytoXl<-function(sheet_unMerged, wb, sheetName, releves, typeCover, tax
   if(!is.numeric(compo[,3]))
   {
     compo[,3]<-sub(",",".",compo[,3])
-    compo[,3][grepl("^[[:space:] ]*[-\\.·] ?$",compo[,3])]<-NA
-    compo<-utils::type.convert(compo)
+    # there is a bug: I am unable to match some characters from phytosociology files, those are spaces unmatched by " ","\s" or "[[:space:]]
+    compo[,3][grepl("^[[:space:] ]*[-\\.·] ?$",compo[,3])| grepl("^[^0-9]-$",compo[,3])]<-NA
+    compo<-utils::type.convert(compo,as.is=T)
   }
   # squares
   squares<-getSquaredBorderRegions(wb,sheetName)
@@ -867,41 +887,30 @@ getCompoPhytoXl<-function(sheet_unMerged, wb, sheetName, releves, typeCover, tax
           c=2:ncol(sheet_unMerged),rel=releves)
     if(is.matrix(sp_carac)){sp_carac<-as.list(as.data.frame(sp_carac))}
     if(is.matrix(rel_synt)){rel_synt<-as.list(as.data.frame(rel_synt))}
-    syntax<-list(
-      sp_carac= data.frame(
+    syntax_sp_carac<- data.frame(
         syntaxon= rep(squares$syntaxGroups, sapply(sp_carac,length)),
-        sp_carac=Reduce(c,sp_carac)),
-      rel_synt= data.frame(
+        sp_carac=Reduce(c,sp_carac))
+    syntax_rel_synt<- data.frame(
         syntaxon= rep(squares$syntaxGroups, sapply(rel_synt,length)),
         releve=Reduce(c,rel_synt)
       )
-    )
   }
   res<-list(compo=compo,taxonomy=getTaxonomyXlFito(taxo_treated))
-  if("syntax"%in%ls(envir = as.environment(-1L)))
-  {res<-c(res, syntax=list(syntax))}
+  # What follows is dirty... on so many levels!
+  if("syntax_sp_carac"%in%ls(envir = as.environment(-1L)) && nrow(syntax_sp_carac)>0)
+  {res[[length(res)+1]]<-syntax_sp_carac
+  names(res)[length(res)]<-"syntax_sp_carac"
+  }
+  if("syntax_rel_synt"%in%ls(envir = as.environment(-1L)) && nrow(syntax_rel_synt)>0)
+  {res[[length(res)+1]]<-syntax_rel_synt
+  names(res)[length(res)]<-"syntax_rel_synt"
+  }
+  
   return(res)
   
 }
 ```
 
-
-```r
-taxoIndic<- taxo_treatNames_plant
-sheet_unMerged<-data_unMerged[[2]][[3]]
-wb<- loadWorkbook(dos_files[2])
-meta_sheet<- getMetadataPhytoXl(sheet_unMerged,spec_fito)
-releves<- meta_sheet$levantamiento
-typeCover<-meta_sheet$typeCoverage[1]
-data_from_compo<- getCompoPhytoXl(sheet_unMerged, wb, "Tabla 33", releves, typeCover, taxoIndic)
-sheetName<- names(wb)[3]
-data_unMerged_all<-Reduce(c,data_unMerged)
-#Reduce(c,lapply(data_unMerged_all[sapply(data_unMerged_all,function(x)linePhytoCoverage(x)$lineFound)], getCompoPhytoXl))->taxNames
-#treatTaxo<- treatTaxNameXlPhyto(taxNames, lev_regex = taxo_treatNames_plant$regex_lev, exceptions_guessLev = taxo_treatNames_plant$exceptions,extract_part = taxo_treatNames_plant$extracPart)
-lev_regex<-taxo_treatNames_plant$regex_lev
-exceptions_guessLev<-taxo_treatNames_plant$exceptions
-extractPart<-taxo_treatNames_plant$extracPart
-```
 
 # Going automatic!
 
@@ -951,33 +960,111 @@ preformat_extractRecognize_XlFitoRangel<-function(files)
          paste("\"",infoFilesSheets$nameSheet[duplicated(infoFilesSheets$nameSheet)], "\"",collapse= ","), "\nPlease change the names of the sheets in your excel files for them to be unique in the group of files")
   }
   infoFilesSheets$type<- sapply(unMerged,recog_type_fitoRangel,spec_fito)
+  infoFilesSheets$comment<- sapply(unMerged, function(x) if(firstCellTitle(x)){return(x[1,1])}else{return(NA)})
   res<-list(unMerged= unMerged, wbs= workBooks,info= infoFilesSheets)
-  names(res$wbs)<-basename(files)
   return(res)
 }
 filesToPreformat<-paste0("../../docFito/",c("Arreglo PERIJA HUMBOLDT (1).xlsx" , "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", "vegetacion paramo perija (1).xlsx"))
 fitoRangelPerija<- preformat_extractRecognize_XlFitoRangel(filesToPreformat)
-fitoRangelPerija$info
+kable(fitoRangelPerija$info, booktab= T)%>%
+  kable_styling(latex_options = c("striped"),font_size = 7)%>%
+  column_spec(column = c(2,5),width = "7cm")%>%
+  landscape()
 ```
 
 ```{r}
-format_lev_XlFitoRangel<-function(extractedInfo, spec_fito, taxoIndic)
+
+preformat_XlFitoRangel<-function(extractedInfo, spec_fito, taxoIndic, writeXl=T, excelFileName=NA)
 {
+  res<-list()
+  res$info<-extractedInfo$info
   n_levantamientos<- extractedInfo$info$nameSheet[extractedInfo$info$type=="levantamiento"]
   metadatas<- lapply(extractedInfo$unMerged[n_levantamientos],getMetadataPhytoXl,spec_fito)
-  metadata<-Reduce(function(tab1,tab2)merge(tab1,tab2,all=T),metadatas)
+  for(i in 1:length(metadatas)){tabla<- names(metadatas)[[i]]; metadatas[[i]]$tabla<- tabla}
+  res$metadata<- Reduce(function(tab1,tab2)merge(tab1,tab2,all=T),metadatas)
+  res$metadata<- res$metadata[order(res$metadata$tabla,res$metadata$levantamiento),]
+  types<-c("info","metadata")
+  if(any(extractedInfo$info$type=="unrecognized"))
+  {
+    nameSheets<-paste(extractedInfo$info$nameSheet[extractedInfo$info$type=="unrecognized"],"unrecognized",sep="_")
+    for(i in 1:sum(extractedInfo$info$type=="unrecognized"))
+    {
+      res[[nameSheets[i]]]<- extractedInfo$unMerged[[extractedInfo$info$nameSheet[extractedInfo$info$type=="unrecognized"]]]
+      types<-c(types,"unrecognized")
+    }
+  }
+  if(any(extractedInfo$info$type=="meta_extra"))
+  {
+    ns<- extractedInfo$info$nameSheet[extractedInfo$info$type=="meta_extra"]
+    nameSheets<-paste(ns,"meta_extra",sep="_")
+    extra_meta<- lapply(extractedInfo$unMerged[extractedInfo$info$type=="meta_extra"],extra_meta_read,spec_fito=spec_fito)
+    
+    for(i in 1:sum(extractedInfo$info$type=="meta_extra"))
+    {
+      res[[nameSheets[i]]]<-extra_meta[[i]]
+      types<-c(types,"meta_extra")
+    }
+  }
   compo_etc<- mapply(getCompoPhytoXl,
                      extractedInfo$unMerged[extractedInfo$info$type=="levantamiento"],
                      rep(extractedInfo$wbs,sapply(extractedInfo$wbs,function(x)length(names(x))))[extractedInfo$info$type=="levantamiento"],
                      extractedInfo$info$nameSheet[extractedInfo$info$type=="levantamiento"],
                      sapply(metadatas,function(x)x$levantamiento),
                      sapply(metadatas,function(x)x$typeCover[1]),
-                     MoreArgs = list(taxoIndic=taxoIndic)
+                     MoreArgs = list(taxoIndic=taxoIndic),
+                     SIMPLIFY = F
                      )
-  
+  sep_compo<-Reduce(c,compo_etc)
+  types<-c(types,names(sep_compo))
+  names(sep_compo)<-paste(rep(names(compo_etc),sapply(compo_etc,length)),names(sep_compo),sep="_")
+  res<-c(res,sep_compo)
+  if(writeXl)
+  {
+    wb<- openxlsx::createWorkbook(
+    )
+    for(i in 1:length(res))
+    {
+      openxlsx::addWorksheet(wb,names(res)[i])
+      openxlsx::writeData(wb,names(res[i]),
+                               x= res[[i]],
+                               colNames= types[i] != "unrecognized",
+                               keepNA = F,
+                               withFilter = (types[i] != "unrecognized")
+                               )
+      if(types[i]%in%c("metadata","meta_extra"))
+      {
+        #Unrecognized columns
+        trm<- test_regex_multi(vecChar=colnames(res[[i]]),
+                         regex_spec = spec_fito$pf_spec$recoField_pf[[types[i]]],
+                         ignore.case= T
+                         )
+        w_trm<-which(is.na(trm$ok))
+        openxlsx::addStyle(wb,names(res)[i],
+                           style= createStyle(fgFill= "#D3D3D3"),
+                           cols = w_trm,
+                           rows = 1:(nrow(res[[i]])+1),
+                           gridExpand = T 
+                           )
+      }
+      if(types[i]=="meta_extra")
+      {
+        cp_met_em_lev<- compare_releve_extrameta_Xlfito(res[[i]],res$metadata)
+        w<- which(!cp_met_em_lev)+1
+        openxlsx::addStyle(wb,names(res)[i],
+                           style= createStyle(fgFill= "#FF7F7F"),
+                           rows= w,
+                           cols= 1:ncol(res[[i]]),
+                           gridExpand = T
+                           )
+      }
+      openxlsx::setColWidths(wb,names(res)[i],cols= 1:ncol(res[[i]]), widths = "auto")
+      
+    }
+    saveWorkbook(wb,file=excelFileName,overwrite = T)
+  }
+  return(res)
 }
-fitoRangelPerija-> extractedInfo
-taxoIndic<-taxo_treatNames_plant
+pf_fitoRangelPerija<-preformat_XlFitoRangel(fitoRangelPerija, spec_fito, taxoIndic=taxo_treatNames_plant, writeXl=T, excelFileName="../../docFito/preformatted/pf_perija.xlsx")
 ```
 
 
