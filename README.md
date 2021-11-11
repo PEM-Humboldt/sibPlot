@@ -40,7 +40,3 @@ In the future, we'll try to find some example open access data which might help,
 Right now, I (@marbotte) will be the main contributor of the repository, and until december, 2021, I'll be almost 100% of my time working on it, so the easiest way to collaborate might be through branches. Do not hesitate to ask me to put you as a collaborator here.
 
 You may as well fork and PR as you wish!
-
-
-
-
