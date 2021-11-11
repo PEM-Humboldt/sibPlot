@@ -35,6 +35,16 @@ In order to create the formats of the input/output and the storing, we use concr
 Unfortunately, this data is not open access, so some of the codes you'll find in the repository might not make completely sense to you.
 In the future, we'll try to find some example open access data which might help, but for now we do not have any way to resolve that issue
 
+# File Organization
+
+The repository consists in various directories:
+
+* **devDocs** (development documents) is where I work the most right now: consists in rmarkdown documents in order to present and resolve the issues, and to develop functions, together with examples of applications
+* **functions** is where the finalized functions should go when they are ready, it is a good practice to put there the functions that might be used in more than one development document as well
+* **inputSpec** is the way I store the input specifications for now, but on the long term, this should be stored in the databases themselves...
+* **pkg** is where we will store the R packages
+* **scripts** are the piece of R code which are neither devDocs (rmarkdown documents) nor R functions. There are pieces of codes which are "scripts" for various applications (I notably put there all the code that Roy developed, in order to be able to get some pieces of his code into functions
+
 # How to contribute
 
 Right now, I (@marbotte) will be the main contributor of the repository, and until december, 2021, I'll be almost 100% of my time working on it, so the easiest way to collaborate might be through branches. Do not hesitate to ask me to put you as a collaborator here.
