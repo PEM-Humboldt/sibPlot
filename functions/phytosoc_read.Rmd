@@ -1,0 +1,1074 @@
+---
+title: "Analyzing and reading the phytosociological files"
+author: "Marius Bottin"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+bibliography: "/home/marius/Travail/Bibliotheque/jabref/UNAL.bib"
+csl: "/home/marius/Travail/Bibliotheque/CSL/chicago.csl"
+output: 
+   pdf_document:
+     toc: true
+     toc_depth: 5
+     number_sections: true
+     latex_engine: xelatex
+
+fontsize: 11pt
+geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
+linkcolor: gray
+urlcolor: blue
+citecolor: cyan
+header-includes:
+  - \usepackage{colortbl}
+  - \usepackage{xcolor}       
+  - \usepackage{lscape}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+--- 
+
+```{r, setup}
+require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
+options(knitr.kable.NA = '---')
+#fileFunctions<-dir("../sib_plot/functions/",pattern=".*\\.R")
+#sapply(fileFunctions,function(x)source(paste("../sib_plot/functions/",x,sep="")))
+```
+
+
+# Merged cells
+
+## The openxlsx methods for merged cells
+
+The problem with phytosociological files is that they contain a lot of merged cells.
+
+I first check on the functions of the package *openxlsx* if there was a solution to unmerge cells and replicate the values for all merged cells, but the option *fillMergedCells* of the function read.xlsx does not work.
+
+Further search in the internal functions allowed me to find the following:
+
+```{r}
+require(openxlsx)
+methods(read.xlsx)
+A<-as.character(getAnywhere(read.xlsx.default))
+cat(A,file="read.xlsx.default.R")
+A<-readLines("read.xlsx.default.R")
+A[grep("merge",A)]
+file.remove("read.xlsx.default.R")
+```
+
+
+It seems complicated to look further in the methods, but it seems that the methods used in the *openxlsx* functions make a mapping of the merged cells.
+The mapping is made after unzipping the formats of the xlsx files to read the xml information of the file.
+```r
+xlsxFile<-"../../XlTest/xl_files/Arreglo PERIJA HUMBOLDT (1).xlsx"
+sheet<-"Hoja1"
+na.strings<-"NA"
+xmlDir <- file.path(tempdir(), paste0(sample(LETTERS, 10), collapse = ""), "_excelXMLRead")
+xmlFiles <- unzip(xlsxFile, exdir = xmlDir)
+worksheet <- xmlFiles[grepl(tolower(sheet), tolower(xmlFiles), fixed = TRUE)]
+cell_info <- openxlsx:::getCellInfo(xmlFile = worksheet, sharedStrings = sharedStrings, skipEmptyRows = skipEmptyRows, startRow = startRow, rows = rows, getDates = detectDates)#29
+merge_mapping <- mergeCell2mapping(cell_info$cellMerge)#31
+```
+
+### Work on openxlsx functions
+
+Finally I made all the work with the *openxlsx* package.
+I extracted the methods from the *openxlsx* package in a very dirty way (I had to use many times the "openxlsx:::" operande to extract inside hidden function from the package), which might become a problem when/if we will build a package.
+
+All the work is in the file [mergedCells_fromopenxlsx.R](./mergedCells_fromopenxlsx.R).
+
+All the code there are functions, so the idea is to source this R script and everything should work!
+
+```{r}
+source("./mergedCells_fromopenxlsx.R")
+```
+
+The important function in the code is: *xl_fillMerged*
+It takes the following arguments:
+
+```{r}
+args(xl_fillMerged)
+```
+
+* fileXl is the name of the file with its (relative) path
+* getWorkbook is a boolean which allows to get a *openxlsx* workbook when T. Otherwise the function return the data from all the sheets, after having separated and filled the merged cells with the merged value
+* writeFile: boolean: do we want to write the modified file
+* dos_unMerged is the path of the directory where we want to write the file, if not given the directory is the directory of the original file (note that the file will be called the same than the original file, but with "_unmerged" before the extension)
+* overwrite: boolean, do we want to overwrite any file called like the unMerged file (note that the file will be called the same than the original file, but with "_unmerged" before the extension)
+
+
+```{r}
+xlsxFile<-"../../XlTest/xl_files/Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx"
+sheet<-"Tabla 33"
+mergedCells<-getCellMerge(xlsxFile = xlsxFile, sheet = sheet )
+treatCellRange(mergedCells)
+dos_unMerged<-"../../XlTest/xl_files/unmerged/"
+xl_fillMerged(xlsxFile,dos_unMerged = dos_unMerged )
+```
+
+************************************
+
+Note: I realized afterward that there might be a way to analyze directly the workbook object without having to pass through all this long process and working from there... 
+Don't know why I did not think about that before
+Hints: apply a "str" to a workbook of an excel file in *openxlsx*: there are some substructure concerning merged cells...
+
+
+*************************************
+
+
+
+
+
+## Python openpyxl method
+
+*********************
+
+**Note**:
+At first I thought that it would be easier to work on some python code that I found on internet, but finally... not so easy!
+
+Anyway I'll keep the code here because it might result easier when we will build a package if the hidden method functions of *openxlsx* are difficult to import in the package...
+
+*********************
+
+
+In internet, there are more information about the *openpyxl* python method
+
+In order to use python3 in this document, we first call the package *reticulate* and then we choose the right python location:
+
+We first need to install the openpyxl package
+```{r}
+require(reticulate)
+#use_condaenv("r-reticulate")
+#reticulate::conda_install(packages="openpyxl")
+#reticulate::conda_install(packages="panda")
+use_python("/usr/bin/python3")
+```
+
+Then the following code in Python3 allows to map the merged cells in a xlsx sheet (note that you need first to install the python *openpyxl* library:
+
+```{python}
+from openpyxl import load_workbook
+wb=load_workbook("../../XlTest/xl_files/Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx")
+sheet_ranges=wb['Tabla 33']
+print(sheet_ranges.merged_cells.ranges)
+```
+
+The idea then is to export the merged cells in a file so we can read it from R and allow to merge them in R.
+It is a temporary solution and a "all R" solution would be much more appropriate in the future, but that is what we got for now.
+
+
+So now, let's try to pass address of the files and sheets we need to treat from R to python
+
+```{r}
+require(openxlsx)
+dos<-"../../XlTest/xl_files/"
+files<-dir(dos,pattern=".*.xlsx$")
+sheetNames<-lapply(paste(dos,files,sep="/"),getSheetNames)
+names(sheetNames)<-paste(dos,files,sep="")
+py$files_xl=rep(names(sheetNames),sapply(sheetNames, length))
+py$xl_sheet=unlist(sheetNames)
+```
+
+```python
+files_xl
+xl_sheet
+print(len(files_xl))
+print(len(xl_sheet))
+txtFile = open("mergedFiles.txt","a+")
+for i in range(len(files_xl)):
+  wb=load_workbook(files_xl[i])
+  sheet_ranges=wb[xl_sheet[i]]
+  txtFile.write(files_xl[i])
+  txtFile.write("\t")
+  txtFile.write(xl_sheet[i])
+  txtFile.write("\t")
+  merged = sheet_ranges.merged_cells.ranges
+  for j in range(len(merged))
+    txtFile.write(merged[j])
+```
+
+# Specs
+
+```{r}
+source_rmd <- function(file, local = FALSE, ...){
+  options(knitr.duplicate.label = 'allow')
+  tempR <- tempfile(tmpdir = ".", fileext = ".R")
+  on.exit(unlink(tempR))
+  knitr::purl(file, output=tempR, quiet = TRUE)
+  envir <- globalenv()
+  source(tempR, local = envir, ...)
+}
+```
+
+
+```r
+purl("./analyseFiles.Rmd")
+```
+
+```{r}
+source_rmd("analyseFiles.Rmd")
+dosSpec<-"../inputSpec/"
+fileTabSpec<- paste(dosSpec,"spec_fitoRangelXl_tables.csv",sep="/")
+fileFieldSpec<-paste(dosSpec,"spec_fitoRangelXl_fields.csv",sep="/")
+filePreforSpec<-paste(dosSpec,"spec_fitoRangelXl_prefor.csv",sep="/")
+spec_fito<- read_CsvSpec(fileSpecTab = fileTabSpec, fileSpecField = fileFieldSpec, fileSpecPrefor = filePreforSpec)
+```
+
+
+
+# Exploration of first phytosociological files
+
+## Reading the files
+
+```{r}
+dos<-"../../docFito/"
+files<-dir(dos,recursive = T,pattern="\\.xlsx$",)
+files<-files[!grepl("_unmerged",files)]
+files<-files[!grepl("preformatted",files)]
+dos_files<-paste(dos,files,sep="/")
+```
+
+First we will create the unmerged-cells xlsx files in the unmerged folder:
+
+```{r}
+data_unMerged<-lapply(dos_files,xl_fillMerged,getWorkbook=F,dos_unMerged=paste0(dos,"unmergedCellsXlsx/"))
+```
+
+Then we read the excel files in a raw form in order to analyse their format:
+
+```{r}
+data_raw<-lapply(dos_files,function(x)
+  {A<-openxlsx::getSheetNames(x)
+  lapply(A,read.xlsx,xlsxFile=x,colNames=F,skipEmptyRows=F,skipEmptyCols=F)
+  })
+names(data_raw)<-names(data_unMerged)<-dos_files
+data_raw<-mapply(function(x,y){names(x)<-names(y);return(x)},data_raw,data_unMerged)
+```
+
+## Determining what data contain each sheet
+
+En los archivos enviados por O. Rangel, hay diferentes tipos de datos:
+
+1. tabla de clasificación fitosociologica (ver "Arreglo PERIJA HUMBOLDT (1).xlsx"). Este tipo de tabla parece consistir en una sola tabla clara, cuadrada, y los nombres de columnas en la linea 1 debería permitir ver si un sheet es corresponde a este tipo
+2. tabla de ubicación (ver "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", sheet 1). Parece que este tipo de tabla siempre tiene su descripción en la primera celda. 
+3. tabla de ubicación y area (ver "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", sheet 2)
+4. tabla de levantamiento (ver "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", sheet 3 a n y los sheet de "vegetacion paramo perija (1).xlsx"). Esas tablas están en 2 partes: una parte de descripción de levantamiento, y una parte dando la composición de los levantamientos. Podríamos basarnos en varios criterios para determinar si estamos en este tipo de datos, pero uno de los más practico podría ser basarse en la mención de Área basal, Cobertura o cobertura relativa: este corresponde a una celda "merged", que toma toda una linea (a veces sin la primera celda de la linea)
+
+
+This function will check whether the first cell of the sheet contains some description of the table
+
+```{r}
+firstCellTitle<-function(sheetRawData)
+{
+  regexDesc<-"^ *Tabla *[0-9]{1,3}\\."
+  grepl(regexDesc,sheetRawData[1,1])
+}
+lapply(data_unMerged,sapply,firstCellTitle)
+```
+
+### Line phytoCoverage
+
+This one will check whether there is a line containing only the description of the coverage method and will return:
+
+* a boolean telling whether it found it
+* which one (see regexes in code for details)
+* at which line
+
+```{r}
+linePhytoCoverage<-function(sheetRawData,headRows=15)
+{
+  emptyRow<-which(apply(sheetRawData,1,function(x)all(is.na(x))))
+  #stopifnot(all(emptyRow>headRows))
+  uniqueOnRow_head<-apply(sheetRawData[1:headRows,],1,function(x)
+    unique(na.omit(x))
+    )
+  only1Value_head<-sapply(uniqueOnRow_head,length)==1
+  regexes_phytoCoverage<-c(areaBasal="^ *[ÁA]rea *basal *(\\(\\%\\))? *$" , cobertura="^ *Cobertura *(\\(%\\))? *$" , coberturaRelativa="^ *Cobertura *relativa *(\\(%\\))? *$")
+  #regexes_phytoCoverage<-c(areaBasal="^ *[ÁA]rea *basal *" , cobertura="$ *Cobertura *(\\(%\\))? *$" , coberturaRelativa="$ *Cobertura *relativa *(\\(%\\))? *$")
+  # testRegexes: create a matrix, colums correspond to lines with only one value, rows correspond which regex (which type of cover)
+  testRegexes<-matrix(Reduce(c,lapply(regexes_phytoCoverage,grepl,uniqueOnRow_head[only1Value_head])),ncol=sum(only1Value_head),nrow=length(regexes_phytoCoverage),byrow = T)
+  w_t<-which(testRegexes,arr.ind = T)
+  stopifnot(nrow(w_t)<=1)
+  if(nrow(w_t)==1)
+  {
+    res<-list(lineFound=T,
+           type=names(regexes_phytoCoverage)[w_t[,"row"]],
+           line=which(only1Value_head)[w_t[,"col"]]
+           )
+  }else{
+    res<-list(lineFound=F,
+           type=NA,
+           line=NA
+           )
+  }
+  return(res)
+}
+```
+
+The function linePhytoCoverage works on unmerged and raw data extracted from the excel files and allows to find the line which:
+
+* makes the separation between metadata and compositions
+* explicit which measure of coverage is used in the composition table
+
+Moreover, it allows to recognise the sheets which correspond to the "tabla de levantamiento" (it might not be sufficient for that goal on the long run, but it works with the few files we got for now).
+
+```{r}
+lapply(data_raw,sapply,linePhytoCoverage)
+lapply(data_unMerged,sapply,linePhytoCoverage)
+```
+
+### Separation of the other types of sheets
+
+I guess it would be sufficient to check whether other sheets can get extra metadata information.
+
+they should:
+
+* be squared
+* with data which can be attributed to the relevés
+
+Then we just have to put the extra variables to the relevés, and maybe compare the common variables to see where they are more comprehensive...
+
+Some of the data here will be syntaxonomic, so maybe we should compare it to the syntaxonomic information that we got from the composition tables...
+
+```{r}
+recog_type_fitoRangel<-function(unMerged_sheet, spec_fito)
+{
+  lpc_info<- linePhytoCoverage(unMerged_sheet)
+  if(lpc_info$lineFound)
+  {return("levantamiento")
+  }else{
+    fct<- firstCellTitle(unMerged_sheet)
+    lineHeader<- which(apply(unMerged_sheet,1,function(x)!any(is.na(x))))[1]
+    cn<-as.character(unMerged_sheet[lineHeader,])
+    recoCn<- test_regex_multi(vecChar = cn, regex_spec = spec_fito$pf_spec$recoField_pf$meta_extra,ignore.case=T)
+    propReco<- sum(!is.na(recoCn$ok))/nrow(recoCn)
+    has.lev<-any(recoCn$ok=="levantamiento")
+    if(propReco<.5|!has.lev)
+    {
+      return("unrecognized")
+    }
+    return("meta_extra")
+  }
+}
+```
+
+
+## Metadata extraction
+
+```{r}
+
+getMetadataPhytoXl <-
+  function(sheet_unMerged,spec_fito)
+    # In the future we might need to pass the file and sheet to the function (in order to keep them in the metadata)
+  {
+    lpc_info <- linePhytoCoverage(sheet_unMerged)
+    firstLineTitle <- firstCellTitle(sheet_unMerged)
+    if (firstLineTitle) {
+      title <- sheet_unMerged[1, 1]
+    } else{
+      title <- NULL
+    }
+    if (firstLineTitle)
+      {row_meta <- 2:lpc_info$line}else
+      {row_meta <- 1:lpc_info$line}
+    emptyRows <- which(apply(sheet_unMerged[row_meta, ], 1, function(x)
+      all(is.na(x) | grepl(
+        "^[[:space:] ]*$", x
+      ))))
+    if (length(emptyRows) > 0) {
+      row_meta <- row_meta[-emptyRows]
+    }
+    col_meta <- 1:ncol(sheet_unMerged)
+    COLN <- sheet_unMerged[row_meta, 1]
+    dupCOLN <- duplicated(COLN)
+    tempoMeta <- sheet_unMerged[row_meta, col_meta]
+    if (sum(dupCOLN) > 0)
+    {
+      dupliValues <- unique(COLN[duplicated(COLN)])
+      w_dupliValues <-
+        lapply(dupliValues, function(x, coln)
+          which(coln == x), coln = COLN)
+      for (i in 1:length(w_dupliValues))
+      {
+        tempoMeta[w_dupliValues[[i]][1], 2:ncol(tempoMeta)] <-
+          apply(tempoMeta[w_dupliValues[[i]], 2:ncol(tempoMeta)], 2,
+                function(x) {
+                  paste(x[!duplicated(x)], sep = " ", collapse = " ")
+                })
+        tempoMeta <-
+          tempoMeta[-w_dupliValues[[i]][2:length(w_dupliValues[[i]])], ]
+      }
+    }
+    (tab_meta <- type.convert(data.frame(t(tempoMeta[, -1])), as.is = T))
+    colnames(tab_meta) <-
+      c(tempoMeta[1:(nrow(tempoMeta) - 1), 1], "typeCoverage")
+    #Recognizing and changing field name
+    metadataRecoFi<- spec_fito$pf_spec$recoField_pf$metadata
+    tabRecoFi<- data.frame(regex= Reduce(c,metadataRecoFi),
+                           nameFi= rep(names(metadataRecoFi), sapply(metadataRecoFi,length)))
+    changeColN_mat<-matrix(Reduce(c,lapply(tabRecoFi$regex, function(r,n)grepl(r,n,ignore.case = T),n=colnames(tab_meta))),
+           nrow=nrow(tabRecoFi),
+           byrow=T)
+    changeColN<-apply(changeColN_mat,2,function(x,n)
+    {
+      w=which(x)
+      if(length(w)==1){return(n[w])}
+      if(length(w)>1){
+        warning("More than one recoField recognise, none selected")
+        return(NA)
+      }
+      if(length(w)==0){return(NA)}
+    },n=tabRecoFi$nameFi)       
+    colnames(tab_meta)[!is.na(changeColN)]<-changeColN[!is.na(changeColN)]
+    tab_meta$typeCoverage <- lpc_info$type
+    return(tab_meta)
+  }
+
+data_unMerged_2 <- Reduce(c, data_unMerged)
+MetaPlot <-
+  lapply(data_unMerged_2[as.logical(sapply(data_unMerged_2, linePhytoCoverage)[1, ])], getMetadataPhytoXl, spec_fito= spec_fito)
+```
+
+### Extra information in extrameta tables
+
+```{r}
+extra_meta_read<-function(uM_sheet,spec_fito){
+  fct<- firstCellTitle(uM_sheet)
+  lineHeader<- which(apply(uM_sheet,1,function(x)!any(is.na(x))))[1]
+  cn<-as.character(uM_sheet[lineHeader,])
+  recoCn<- test_regex_multi(vecChar = cn, regex_spec = spec_fito$pf_spec$recoField_pf$meta_extra,ignore.case=T)
+  tab<- uM_sheet[lineHeader+1:nrow(uM_sheet),]
+  colnames(tab)[!is.na(recoCn$ok)]<- recoCn$ok[!is.na(recoCn$ok)]
+  colnames(tab)[is.na(recoCn$ok)]<- recoCn$testedString[is.na(recoCn$ok)]
+  return(tab)
+}
+```
+
+```{r}
+compare_releve_extrameta_Xlfito<- function(extrameta,tab_metadata)
+{
+  lev_em<-as.character(extrameta$levantamiento)
+  lev_meta<-as.character(tab_metadata$levantamiento)
+  return(lev_em%in%lev_meta)
+}
+```
+
+
+
+
+## Composition data extraction
+
+### Extracting squared regions in a composition data table in excel
+
+Putting a square around a part of a composition table in a phytosociological data table as actually a very specific meaning.
+It means that the relevés in the square are considered part of a common syntaxa, and that the species in the square are diagnostic species for determining this syntaxa.
+
+Here is a function that can extract such squares in an excel sheet:
+
+```{r}
+wb<-loadWorkbook(xlsxFile)
+getSquaredBorderRegions<-function(wb,sheet)
+{
+  style_sheet<-wb$styleObjects[sapply(wb$styleObjects,function(x)x$sheet)==sheet]
+  borderStyle<-sapply(style_sheet,function(x)
+  {
+    border<-c(
+      bottom=!is.null(x[[1]]$borderBottom),
+      top=!is.null(x[[1]]$borderTop),
+      left=!is.null(x[[1]]$borderLeft),
+      right=!is.null(x[[1]]$borderRight)
+    )
+    if(!sum(border)%in%c(1,2))
+    {return(NA)}
+    if(sum(border)==1)
+    {return(names(border)[border])}
+    if(sum(border)==2)
+    {
+      if(all(border[c(2,3)])){return("topleft")}
+      if(all(border[c(2,4)])){return("topright")}
+      if(all(border[c(1,3)])){return("bottomleft")}
+      if(all(border[c(1,4)])){return("bottomright")}
+    }
+    return(NA)
+  })
+  cellBorder<-Reduce(rbind.data.frame,mapply(function(x,y)
+  {
+    if(is.na(y)){return(NULL)}
+    return(data.frame(r=x$rows,c=x$cols,border=y))
+  },style_sheet,borderStyle,SIMPLIFY=F))
+  res<-data.frame(topleft.x=NULL,topleft.y=NULL,bottomright.x=NULL,bottomright.y=NULL)
+  if(nrow(cellBorder)==0){return(res)}
+  cellBorder<-cellBorder[order(cellBorder$r,cellBorder$c),]
+  topLefts<-cellBorder[cellBorder$border=="topleft",]
+  for(i in 1:nrow(topLefts))
+  {
+    curTopLeft<-as.list(topLefts[i,])
+    #checkTopRight and top
+    corresTopRights<-cellBorder[cellBorder$border=="topright"&
+                                 cellBorder$r==curTopLeft$r&
+                                 cellBorder$c>curTopLeft$c,]
+    if(nrow(corresTopRights)==0){next}
+    corresTopRight<-as.list(corresTopRights[which.min(corresTopRights$c),])
+    condTopOK<-(
+      (curTopLeft$c+1)==corresTopRight$c|
+      all(
+      (curTopLeft$c+1):(corresTopRight$c-1)%in%cellBorder[cellBorder$border=="top"&cellBorder$r==curTopLeft$r,"c"]))
+    if(!condTopOK){next}
+    #check bottomleft and left
+    corresBottomLefts<-cellBorder[cellBorder$border=="bottomleft"&
+                                 cellBorder$c==curTopLeft$c&
+                                 cellBorder$r>curTopLeft$r,]
+    if(nrow(corresBottomLefts)==0){next}
+    corresBottomLeft<-as.list(corresBottomLefts[which.min(corresBottomLefts$c),])
+    condLeftOK<-(
+      (curTopLeft$r+1)==corresBottomLeft$r|
+        all(
+      (curTopLeft$r+1):(corresBottomLeft$r-1)%in%cellBorder[cellBorder$border=="left"&cellBorder$c==curTopLeft$c,"r"])
+    )
+    if(!condLeftOK){next}
+      # checking bottomright
+    condBottomRightOK<-any(cellBorder$border=="bottomright"&cellBorder$r==corresBottomLeft$r&cellBorder$c==corresTopRight$c)
+    if(!condBottomRightOK){next}
+      #checking bottom
+    condBottomOK<-(curTopLeft$c+1)==corresTopRight$c|all(
+        (curTopLeft$c+1):(corresTopRight$c-1)%in%cellBorder[cellBorder$border=="bottom"&cellBorder$r==corresBottomLeft$r,"c"]
+      )
+    if(!condBottomOK){next}
+      #checking right
+    condRightOK<-(curTopLeft$r+1)==corresBottomLeft$r|all(
+         (curTopLeft$r+1):(corresBottomLeft$r-1)%in%cellBorder[cellBorder$border=="right"&cellBorder$c==corresTopRight$c,"r"]
+      )
+    if(!condRightOK){next}
+    #append res
+    res<-rbind(res,data.frame(topleft.x=curTopLeft$c,topleft.y=curTopLeft$r,bottomright.x=corresTopRight$c,bottomright.y=corresBottomLeft$r))
+    
+  }
+  return(res)
+}
+
+kable(
+  getSquaredBorderRegions(wb,sheet),
+  booktab=T)
+```
+
+### Taxonomía
+
+The following functions will treat the names as given in a Excel file of phytosociology from O. Rangel.
+
+The idea is that we apply various operation to separate the different parts of the names which may include important information.
+This is done by recognizing structures in the names, extracting information from some parts of the taxonomic names and modifying recursively the name vector until it is a simple taxonomic name that can be taxonomically analyzed.
+Then the taxonomic level is guessed, and the different parts of the names are extracted
+
+The order of the operations may be of great importance, so here is the order we used for the funtion:
+
+1. clean spaces in the names (remove spaces at the end and the beginning, replace special spaces by simple space and remove double spaces)
+1. Extract, treat and remove parentheses. Those can have special meaning in the files from O. Rangel
+   + there are some references which look like some catalog references
+   + in the case of rare species, there might be some information on the relevés where they are found and their cover
+1. Extract, treat and remove cases of unprecise determination:
+   + *cf.* Note that all the string after aff. will be extracted and removed, including whether there are some taxonomic sublevels there
+   + *aff.* same as "*cf.*"
+   + *ined.* at the end of the taxonomic denomination
+   + *sp.* + number (the number is extracted as text and as it is)
+   + *sp.* at the end of the taxonomic denomination
+   + *spp.* at the end of the taxonomic denomination
+1. Recognizing the undetermined taxa (recognizing the strings "undetermined", "indeterminado", "indeterminada")
+1. Guessing of the taxonomic ranks of the taxa (from the suffix used if the name is of one word)
+1. Extract, treat and remove the subspecific ranks
+1. Checking whether all taxa have a form of species (2 names, uppercase only on the genus name) or genera/higher ranks
+1. Extracting the genus and specific epithete of the species
+
+
+```{r}
+# create regex object (external to the functions) for guessing taxonomic levels
+taxo_treatNames_plant<-list(
+  regex_lev= c(
+    undeter= "[UIui]ndetermin[ae]d[ao]?",
+    subsp= "^([A-Z][[:alpha:]-]+) ([[:alpha:]-]+) subsp(\\.| ){1,2}([[:alpha:]-]+)$",
+    var= "^([A-Z][[:alpha:]-]+) ([[:alpha:]-]+) var(\\.| ){1,2}([[:alpha:]-]+)$",
+    sp= "^([A-Z][[:alpha:]-]+) ([[:alpha:]-]+)$",
+    fam= "^([A-Z][[:alpha:]-]+aceae)$",
+    subfam= "^([A-Z][[:alpha:]-]+oideae)$",
+    supfam= "^([A-Z][[:alpha:]-]+acea)$",
+    subor= "^([A-Z][[:alpha:]-]+ineae)$",
+    or= "^([A-Z][[:alpha:]-]+ales)$",
+    supor= "^([A-Z][[:alpha:]-]+anae)$",
+    subcl= "^([A-Z][[:alpha:]-]+idae)$",
+    phyl= "^([A-Z][[:alpha:]-]+phyta)$",
+    subphyl= "^([A-Z][[:alpha:]-]+phytina)$",
+    cl= "^([A-Z][[:alpha:]-]+opsida)$",
+    subcl= "^([A-Z][[:alpha:]-]+opsida)$",
+    tribe= "^([A-Z][[:alpha:]-]+eae)$",
+    gn= "^([A-Z][[:alpha:]-]+)$"
+  ),
+  exceptions= data.frame(lev=c("fam"),name=c("Leguminosae")),
+  extractPart= list(
+    subsp=c("genus"="\\1","sp_epi"="\\2","subspecies"="\\4"),
+    var=c("genus"="\\1","sp_epi"="\\2","variety"="\\4"),
+    sp=c("genus"="\\1","sp_epi"="\\2")
+  )
+  
+)
+
+guess_level<- function(taxNames,regex_lev,exceptions,order_reg=NA)
+{
+  if(is.na(order_reg))
+  {
+    order_reg=names(regex_lev)
+  }
+  regex_lev<-regex_lev[match(names(regex_lev),order_reg)]
+  testRegex<-sapply(regex_lev,function(reg,nam)grepl(reg,nam),nam=taxNames)
+  unable_guess<-which(rowSums(testRegex)==0)
+  if(length(unable_guess)>0)
+  {
+    for(i in unable_guess)
+    {
+      warning(paste0("We were unable to guess the taxonomic level of \"",taxNames[unable_guess],"\""))
+    }
+  }
+  guessed<- colnames(testRegex)[apply(testRegex,1,function(x)which(x)[1])]
+  guessed[taxNames%in%exceptions$name]<- na.omit(exceptions[match(taxNames,exceptions$name),"lev"])
+  return(guessed)
+}
+
+extract_taxParts<- function(taxNames, tax_lev, regex_lev, extractPart)
+{
+  list_tax_lev<- tapply(taxNames,tax_lev,function(x)x)[names(extractPart)]
+  regex_app<-regex_lev[names(extractPart)]
+  separate<-mapply(function(names,regex,parts)
+  {
+    sapply(parts,function(x,n,r)sub(r,x,n),n=names,r=regex)
+  },list_tax_lev,regex_app,extractPart)
+  res<- vector(mode= "list",length= length(separate))
+  for(i in 1:length(separate))
+  {
+    res[[i]]<-data.frame(id_m= match(list_tax_lev[[i]],taxNames),separate[[i]])
+  }
+  return(res)
+}
+```
+
+
+```{r}
+treatTaxNameXlPhyto<- function(taxNames, taxoIndic)
+{
+  
+  # Keeping initial taxNames
+  taxNames_init<-taxNames
+  # Eliminate irrelevant spaces:
+  taxNames<-sub("^[[:space:]]*","",taxNames)
+  taxNames<-sub("[[:space:]]*$","",taxNames)
+  taxNames<-sub("[[:space:]]+"," ",taxNames)
+  # Working on parenthesis
+  ## there seems to be different things in parentheses: external references to the species identification, and in the case of rare species: their presences in some relevés 
+  regexParenth_all<-"(\\(|\\))"
+  regexParenth<- "^([[:alnum:] \\.-]+)[[:space:]]*\\((.+)\\)$"
+  caseParenth<-grepl(regexParenth, taxNames)
+  caseParenth_all<-grepl(regexParenth_all, taxNames)
+  weirdParenthesis<- which(caseParenth_all&!caseParenth)
+  if(length(weirdParenthesis)>0)
+  {
+    for(i in weirdParenthesis)
+        warning(paste("Taxon name:",taxNames_init[i],". We recognize a parenthesis case without being able to treat it."))
+  }
+  parenthesis<-character(length(taxNames))
+  parenthesis[caseParenth]<- sub(regexParenth,"\\2",taxNames[caseParenth])
+  taxNames[caseParenth]<- sub(regexParenth,"\\1",taxNames[caseParenth])
+  taxNames[caseParenth]<- sub("[[:space:]]*$","",taxNames[caseParenth])
+  sinParenth<-taxNames
+  # Case 1: references for taxon definition?
+  regexParDef<- "^[A-Z]{2,6} [0-9]{2,8}$"
+  defTax<- character(length(taxNames))
+  defTax[grep(regexParDef, parenthesis)]<- parenthesis[grep(regexParDef, parenthesis)]
+  # Case 2: references for rare presences
+  regexRare<- "^([A-Z]{1,5}[0-9]{1,5}/[0-9,]+; )*([A-Z]{1,5}[0-9]{1,5}/[0-9,]+)$"
+  caseRegexRare<-grepl(regexRare, parenthesis)
+  if(sum(caseRegexRare)>0){
+    splitRare<- strsplit(parenthesis[caseRegexRare], "; ")
+    split2Rare<- strsplit(Reduce(c,splitRare),"/")
+    rarePres<- data.frame(matchTax= rep(which(caseRegexRare), sapply(splitRare, length)),
+                releve= sapply(split2Rare, function(x)x[1]),
+                coverage= as.double(sub(",",".",sapply(split2Rare, function(x)x[2])))
+               )
+  }else{rarePres<-list2DF(list(matchTax= NULL, releve= NULL,coverage=NULL))}
+  noCase<- which(caseParenth& !grepl(regexParDef, parenthesis)& !caseRegexRare)
+  stopifnot(length(noCase)==0)
+  # keep as "CF" all what is after cf.
+  regex_cf_all<-" cf\\.?"
+  regex_cf<-"^([A-Za-z][[:alpha:]-]+) cf\\.? ?(.*)$"
+  caseCf<-grepl(regex_cf,taxNames)
+  weirdCf<-which(grepl(regex_cf_all,taxNames)&!grepl(regex_cf,taxNames))
+  if(length(weirdCf)>0)
+  {
+    for(i in weirdCf)
+      warning(paste("Taxon name:", taxNames_init[i], ". We recognize a cf. case without being able to treat it."))
+  }
+  CF<- character(length(taxNames))
+  CF[caseCf]<- sub(regex_cf, "\\2",taxNames[caseCf])
+  taxNames[caseCf]<-sub(regex_cf, "\\1", taxNames[caseCf])
+  # keep as AFF all what is after aff.
+  regex_aff_all<-" aff\\."
+  regex_aff<-"^([A-Za-z][[:alpha:]-]+) aff\\. (.*)$"
+  caseAff<-grepl(regex_aff,taxNames)
+  weirdAff<-which(grepl(regex_aff_all,taxNames)&!grepl(regex_aff,taxNames))
+  if(length(weirdAff)>0)
+  {
+    for(i in weirdAff)
+      warning(paste("Taxon name:", taxNames_init[i], ". We recognize a aff. case without being able to treat it."))
+  }
+  AFF<- character(length(taxNames))
+  AFF[caseAff]<- sub(regex_aff, "\\2",taxNames[caseAff])
+  taxNames[caseAff]<-sub(regex_aff, "\\1", taxNames[caseAff])
+  # ined. final
+  regex_ined_fin<- "(.*) ined\\.$"
+  INED<- grepl(regex_ined_fin, taxNames)
+  taxNames[INED]<- sub(regex_ined_fin,"\\1",taxNames[INED])
+  # sp numbered
+  regex_sp_numbered<- "^([A-Z][[:alpha:]-]+) sp\\.? ?([0-9]{1,2}\\.?)$"
+  caseSpNumbered<- grepl(regex_sp_numbered, taxNames)
+  SP_N<-character(length(taxNames))
+  SP_N[caseSpNumbered]<- sub(regex_sp_numbered, "\\2", taxNames[caseSpNumbered])
+  taxNames[caseSpNumbered]<- sub(regex_sp_numbered, "\\1", taxNames[caseSpNumbered])
+  # sp final
+  regex_sp_final<- "^([A-Z][[:alpha:]-]+) sp\\.?$"
+  SP_F<- grepl(regex_sp_final, taxNames)
+  taxNames[SP_F]<- sub(regex_sp_final, "\\1", taxNames[SP_F])
+  #spp final
+  regex_spp_final<- "^([A-Z][[:alpha:]-]+) spp\\.?$"
+  SPP_F<- grepl(regex_spp_final, taxNames)
+  taxNames[SPP_F]<- sub(regex_spp_final, "\\1", taxNames[SPP_F])
+  #guessed_lev<- guess_level(taxNames = taxNames,regex_lev = lev_regex,exceptions = exceptions_guessLev)
+  guessed_lev<-do.call(guess_level,args=c(taxNames=list(taxNames),taxoIndic[c("regex_lev","exceptions")]))
+  #taxo_parts<-extract_taxParts(taxNames = taxNames, tax_lev = guessed_lev, regex_lev= lev_regex, extractPart = extract_part)
+  taxo_parts<-do.call(extract_taxParts,c(list(taxNames=taxNames, tax_lev= guessed_lev),taxoIndic[c("regex_lev","extractPart")]))
+  names(taxo_parts)<- names(taxoIndic$extractPart)
+  return(list(taxs=data.frame(verbatim=sinParenth, taxName=taxNames,guessed_level=guessed_lev),
+              taxo_extra=list(
+                cf= data.frame(taxMatch= which(caseCf), verbatimCf= CF[caseCf]),
+                aff= data.frame(taxMatch= which(caseAff), verbatimAff= AFF[caseAff]),
+                Ined= which(INED),
+                spNumbered= data.frame(taxMatch= which(caseSpNumbered), verbatimSp=SP_N[caseSpNumbered]),
+                spF= which(SP_F),
+                SPP_F= which(SPP_F),
+                taxParts= taxo_parts,
+                cataRef=data.frame(taxMatch=which(defTax!=""),catalog=defTax[defTax!=""])
+                ),
+              rareSpecies=rarePres
+              )
+         )
+}
+```
+
+```{r}
+# Here we are considering that the susbspecific levels we'll get are variety and subspecies (which make sense), but we might get forms and subforms in the future?
+getTaxonomyXlFito<- function(treated_taxo)
+{
+  taxonomy<- treated_taxo$taxs
+  taxonomy$sup_gn<- NA
+  taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$subsp$id_m]<- treated_taxo$taxo_extra$taxParts$subsp$genus
+  taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$var$id_m]<- treated_taxo$taxo_extra$taxParts$var$genus
+  taxonomy$sup_gn[treated_taxo$taxo_extra$taxParts$sp$id_m]<- treated_taxo$taxo_extra$taxParts$sp$genus
+  taxonomy$sup_sp<- NA
+  taxonomy$sup_sp[treated_taxo$taxo_extra$taxParts$subsp$id_m]<- apply(treated_taxo$taxo_extra$taxParts$subsp[,2:3], 1, paste, collapse=" ")
+  taxonomy$sup_sp[treated_taxo$taxo_extra$taxParts$var$id_m]<- apply(treated_taxo$taxo_extra$taxParts$var[,2:3], 1, paste, collapse= " ")
+  taxonomy$catalog<- NA
+  taxonomy$catalog[treated_taxo$taxo_extra$cataRef$taxMatch]<- treated_taxo$taxo_extra$cataRef$catalog
+  return(taxonomy)
+}
+```
+
+
+
+
+### Composición
+
+
+The function mat2dbTab takes a matrix and pass it to a database format, which every lines being the association of a column (species) and a row (sampling unit) of the original matrix.
+
+It has 2 levels:
+
+* filledNumeric: the original matrix is a nice numeric matrix filled with 0 where the species is absent
+* !filledNumeric: the original matrix is a dirty matrix with all kind of bad formatted text inside
+
+
+```{r}
+mat2dbTab <-
+function(mat, checklist= F, filledNumeric= is.numeric(mat), nameRow="releve", nameCol="taxon", nameQuantityCol="cover")
+{
+  if(filledNumeric)
+  {W<- which(!is.na(mat)&mat>0,arr.ind<-T)
+  }else{
+  W<- which(!is.na(mat)&mat!=""&!grepl("^[[:space:] ]*$",mat),arr.ind = T)
+  }
+	if(!checklist){
+  dbTab<-data.frame(rownames(mat)[W[,"row"]], colnames(mat)[W[,"col"]], mat[W])
+  colnames(dbTab)<-c(nameRow,nameCol,nameQuantityCol)
+	}else{
+  dbTab<-data.frame(rownames(mat)[W[,"row"]], colnames(mat)[W[,"col"]])
+  colnames(dbTab)<-c(nameRow,nameCol)
+	}
+	numSU<-all(grepl("^[0-9]+$",dbTab[,1]))
+	if(numSU){dbTab[,1]<-as.numeric(as.character(dbTab[,1]))}
+  dbTab<-dbTab[order(dbTab[,1],dbTab[,2]),]
+  return(utils::type.convert(dbTab,as.is=T))
+}
+```
+
+Now we make the function that will extract all the data from the composition part of the sheets.
+
+As arguments it takes:
+
+* sheet_unMerged: the raw data extracted from the excel file after having unmerged merged cells
+* wb: the read workbook in openxlsx format, the idea is to get all the formatting from there to be able to extract the squares
+* sheetName, well, the sheet name!
+* releves: the names of the relevés, in the same order as the column of the sheet, extracted from the metadata
+* typeCover: the types of cover
+* taxoIndic: the taxonomic rules to guess the levels of the taxa, the different parts of taxonomic denomination etc.
+
+As values, it returns:
+
+* the composition in a database format
+* the taxonomy information as a table
+* the syntaxonomy information as 2 tables:
+  + the relevés included in the syntaxa
+  + the characteristic species for each syntaxon
+
+```{r}
+getCompoPhytoXl<-function(sheet_unMerged, wb, sheetName, releves, typeCover, taxoIndic)
+{
+  lpc_info<-linePhytoCoverage(sheet_unMerged)
+  stopifnot(length(releves)==(ncol(sheet_unMerged)-1))
+  rows_compo<-(lpc_info$line+1):nrow(sheet_unMerged)
+  #sheet_unMerged[rows_compo,1]
+  rows_onlyRownames<-which(apply(sheet_unMerged,1,function(x)!is.na(x[1])&all(is.na(x[2:length(x)]))))
+  rows_oR_compo<-rows_onlyRownames[rows_onlyRownames>lpc_info$line]
+  rows_otrasEspecies<-rows_oR_compo[grepl(" *otras *especies *", sheet_unMerged[rows_oR_compo,1], ignore.case=T)]
+  if(length(rows_otrasEspecies)>1)
+  {warning("More than one line seems to delimit the \"other species\" zone.")}
+  emptyRows<-which(apply(sheet_unMerged,1,function(x)all(is.na(x))))
+  rowsTax<-rows_compo[(!rows_compo%in%rows_oR_compo)&!rows_compo%in%emptyRows]
+  if(length(rows_otrasEspecies)==1)
+  {rowsTax<-c(rowsTax,rows_compo[rows_compo>rows_otrasEspecies&!(rows_compo%in%emptyRows)])}
+  taxDesc<-sheet_unMerged[rowsTax,1]
+  taxo_treated<-treatTaxNameXlPhyto(taxDesc, taxoIndic = taxoIndic)
+  mat_compo<- t(as.matrix(sheet_unMerged[rowsTax,2:ncol(sheet_unMerged)]))
+  dimnames(mat_compo)=list(releves,taxo_treated$taxs$verbatim)
+  compo<-mat2dbTab(mat_compo, nameQuantityCol = typeCover)
+  if(nrow(taxo_treated$rareSpecies)>1)
+  {
+    extraTab<-data.frame(
+                    taxo_treated$rareSpecies$releve,  
+                    taxo_treated$taxs$verbatim [taxo_treated$rareSpecies$matchTax],
+                    taxo_treated$rareSpecies$coverage
+                    )
+    colnames(extraTab)<- colnames(compo)
+    compo<-rbind(compo,extraTab)
+  }
+  if(!is.numeric(compo[,3]))
+  {
+    compo[,3]<-sub(",",".",compo[,3])
+    # there is a bug: I am unable to match some characters from phytosociology files, those are spaces unmatched by " ","\s" or "[[:space:]]
+    compo[,3][grepl("^[[:space:] ]*[-\\.·] ?$",compo[,3])| grepl("^[^0-9]-$",compo[,3])]<-NA
+    compo<-utils::type.convert(compo,as.is=T)
+  }
+  # squares
+  squares<-getSquaredBorderRegions(wb,sheetName)
+  if(nrow(squares)>=1)
+  {
+    m_sq_oR<-match(squares$topleft.y-1,rows_oR_compo)
+    squares$syntaxGroups<-NA
+    squares[!is.na(m_sq_oR),"syntaxGroups"]<-sheet_unMerged[rows_oR_compo[m_sq_oR[!is.na(m_sq_oR)]],1]
+    squares<-squares[!is.na(squares$syntaxGroups),]
+    sp_carac<- apply(squares,1,function(x,rt,sp)sp[which(rt%in%(x[2]:x[4]))],
+          rt=rowsTax,sp=taxo_treated$taxs$verbatim)
+    rel_synt<- apply(squares,1,function(x,c,rel)rel[which(c%in%(x[1]:x[3]))],
+          c=2:ncol(sheet_unMerged),rel=releves)
+    if(is.matrix(sp_carac)){sp_carac<-as.list(as.data.frame(sp_carac))}
+    if(is.matrix(rel_synt)){rel_synt<-as.list(as.data.frame(rel_synt))}
+    syntax_sp_carac<- data.frame(
+        syntaxon= rep(squares$syntaxGroups, sapply(sp_carac,length)),
+        sp_carac=Reduce(c,sp_carac))
+    syntax_rel_synt<- data.frame(
+        syntaxon= rep(squares$syntaxGroups, sapply(rel_synt,length)),
+        releve=Reduce(c,rel_synt)
+      )
+  }
+  res<-list(compo=compo,taxonomy=getTaxonomyXlFito(taxo_treated))
+  # What follows is dirty... on so many levels!
+  if("syntax_sp_carac"%in%ls(envir = as.environment(-1L)) && nrow(syntax_sp_carac)>0)
+  {res[[length(res)+1]]<-syntax_sp_carac
+  names(res)[length(res)]<-"syntax_sp_carac"
+  }
+  if("syntax_rel_synt"%in%ls(envir = as.environment(-1L)) && nrow(syntax_rel_synt)>0)
+  {res[[length(res)+1]]<-syntax_rel_synt
+  names(res)[length(res)]<-"syntax_rel_synt"
+  }
+  
+  return(res)
+  
+}
+```
+
+
+# Going automatic!
+
+## Pre-formatting files
+
+It might be good to apply some pre-formatting to the files:
+
+1. merge various files that may have information on common plot, or that we would like to keep as a group
+1. basic formatting from Excel files (unMerging etc.). Here I do not think that writing an unMerged file would be useful anymore
+1. recognize the type of information included in the sheets
+1. separate different informations from the sheets (metadata/composition/taxonomy/syntaxonomy)
+1. get the preformatted files in a R list, but allowing to write an excel file as well
+
+
+### Merging files
+
+It appears that merging the files and keeping their formatting is much more complicated than expected.
+Some clues about how to do that with with *openxlsx* are to be found in the function cloneWorksheet, which allows to clone a worksheet in the same workbook, but this function calls for a method which can be found as [name_of_workbook]$cloneWoksheet
+Not that it might be imperative to copy the styles in the worksheet first.
+
+Anyway, for now, there is no simple solution for now, so what we need to do is to keep the various Workbook objects and to get the data (unMerged and/or raw) in lists that are with depth one, or to keep an object referencing the other ones...
+
+```r
+concatXl<- function(files, getWorkbook=T, fileConcat=NA)
+{
+  listWb<- lapply(files, openxlsx::loadWorkbook)
+  wb<-createWorkbook()
+  sheets<-Reduce(c,sapply(listWb,names))
+  for(i in sheets){addWorksheet(wb)}
+  
+  
+}
+```
+
+```{r}
+preformat_extractRecognize_XlFitoRangel<-function(files)
+{
+  unMerged<-Reduce(c,lapply(files,FUN = xl_fillMerged,getWorkbook=F,writeFile=F))
+  workBooks<-lapply(files,FUN = loadWorkbook)
+  infoFilesSheets<-data.frame(nameSheet=Reduce(c, sapply(workBooks,names)),
+                              file=rep(basename(files), sapply(workBooks, function(x)length(names(x)))),
+                              path=rep(dirname(files), sapply(workBooks, function(x)length(names(x))))
+                              )
+  if(any(duplicated(infoFilesSheets$nameSheet)))
+  {
+    stop("Duplication of the following sheet names:",
+         paste("\"",infoFilesSheets$nameSheet[duplicated(infoFilesSheets$nameSheet)], "\"",collapse= ","), "\nPlease change the names of the sheets in your excel files for them to be unique in the group of files")
+  }
+  infoFilesSheets$type<- sapply(unMerged,recog_type_fitoRangel,spec_fito)
+  infoFilesSheets$comment<- sapply(unMerged, function(x) if(firstCellTitle(x)){return(x[1,1])}else{return(NA)})
+  res<-list(unMerged= unMerged, wbs= workBooks,info= infoFilesSheets)
+  return(res)
+}
+filesToPreformat<-paste0("../../docFito/",c("Arreglo PERIJA HUMBOLDT (1).xlsx" , "Tablas Perija Vegetacion Libro XVIII 05 octubre (1).xlsx", "vegetacion paramo perija (1).xlsx"))
+fitoRangelPerija<- preformat_extractRecognize_XlFitoRangel(filesToPreformat)
+kable(fitoRangelPerija$info, booktab= T)%>%
+  kable_styling(latex_options = c("striped"),font_size = 7)%>%
+  column_spec(column = c(2,5),width = "7cm")%>%
+  landscape()
+```
+
+```{r}
+
+preformat_XlFitoRangel<-function(extractedInfo, spec_fito, taxoIndic, writeXl=T, excelFileName=NA)
+{
+  res<-list()
+  res$info<-extractedInfo$info
+  n_levantamientos<- extractedInfo$info$nameSheet[extractedInfo$info$type=="levantamiento"]
+  metadatas<- lapply(extractedInfo$unMerged[n_levantamientos],getMetadataPhytoXl,spec_fito)
+  for(i in 1:length(metadatas)){tabla<- names(metadatas)[[i]]; metadatas[[i]]$tabla<- tabla}
+  res$metadata<- Reduce(function(tab1,tab2)merge(tab1,tab2,all=T),metadatas)
+  res$metadata<- res$metadata[order(res$metadata$tabla,res$metadata$levantamiento),]
+  types<-c("info","metadata")
+  if(any(extractedInfo$info$type=="unrecognized"))
+  {
+    nameSheets<-paste(extractedInfo$info$nameSheet[extractedInfo$info$type=="unrecognized"],"unrecognized",sep="_")
+    for(i in 1:sum(extractedInfo$info$type=="unrecognized"))
+    {
+      res[[nameSheets[i]]]<- extractedInfo$unMerged[[extractedInfo$info$nameSheet[extractedInfo$info$type=="unrecognized"]]]
+      types<-c(types,"unrecognized")
+    }
+  }
+  if(any(extractedInfo$info$type=="meta_extra"))
+  {
+    ns<- extractedInfo$info$nameSheet[extractedInfo$info$type=="meta_extra"]
+    nameSheets<-paste(ns,"meta_extra",sep="_")
+    extra_meta<- lapply(extractedInfo$unMerged[extractedInfo$info$type=="meta_extra"],extra_meta_read,spec_fito=spec_fito)
+    
+    for(i in 1:sum(extractedInfo$info$type=="meta_extra"))
+    {
+      res[[nameSheets[i]]]<-extra_meta[[i]]
+      types<-c(types,"meta_extra")
+    }
+  }
+  compo_etc<- mapply(getCompoPhytoXl,
+                     extractedInfo$unMerged[extractedInfo$info$type=="levantamiento"],
+                     rep(extractedInfo$wbs,sapply(extractedInfo$wbs,function(x)length(names(x))))[extractedInfo$info$type=="levantamiento"],
+                     extractedInfo$info$nameSheet[extractedInfo$info$type=="levantamiento"],
+                     sapply(metadatas,function(x)x$levantamiento),
+                     sapply(metadatas,function(x)x$typeCover[1]),
+                     MoreArgs = list(taxoIndic=taxoIndic),
+                     SIMPLIFY = F
+                     )
+  sep_compo<-Reduce(c,compo_etc)
+  types<-c(types,names(sep_compo))
+  names(sep_compo)<-paste(rep(names(compo_etc),sapply(compo_etc,length)),names(sep_compo),sep="_")
+  res<-c(res,sep_compo)
+  if(writeXl)
+  {
+    wb<- openxlsx::createWorkbook(
+    )
+    for(i in 1:length(res))
+    {
+      openxlsx::addWorksheet(wb,names(res)[i])
+      openxlsx::writeData(wb,names(res[i]),
+                               x= res[[i]],
+                               colNames= types[i] != "unrecognized",
+                               keepNA = F,
+                               withFilter = (types[i] != "unrecognized")
+                               )
+      if(types[i]%in%c("metadata","meta_extra"))
+      {
+        #Unrecognized columns
+        trm<- test_regex_multi(vecChar=colnames(res[[i]]),
+                         regex_spec = spec_fito$pf_spec$recoField_pf[[types[i]]],
+                         ignore.case= T
+                         )
+        w_trm<-which(is.na(trm$ok))
+        openxlsx::addStyle(wb,names(res)[i],
+                           style= createStyle(fgFill= "#D3D3D3"),
+                           cols = w_trm,
+                           rows = 1:(nrow(res[[i]])+1),
+                           gridExpand = T 
+                           )
+      }
+      if(types[i]=="meta_extra")
+      {
+        cp_met_em_lev<- compare_releve_extrameta_Xlfito(res[[i]],res$metadata)
+        w<- which(!cp_met_em_lev)+1
+        openxlsx::addStyle(wb,names(res)[i],
+                           style= createStyle(fgFill= "#FF7F7F"),
+                           rows= w,
+                           cols= 1:ncol(res[[i]]),
+                           gridExpand = T
+                           )
+      }
+      openxlsx::setColWidths(wb,names(res)[i],cols= 1:ncol(res[[i]]), widths = "auto")
+      
+    }
+    saveWorkbook(wb,file=excelFileName,overwrite = T)
+  }
+  return(res)
+}
+pf_fitoRangelPerija<-preformat_XlFitoRangel(fitoRangelPerija, spec_fito, taxoIndic=taxo_treatNames_plant, writeXl=T, excelFileName="../../docFito/preformatted/pf_perija.xlsx")
+```
+
+
+
+
+
+

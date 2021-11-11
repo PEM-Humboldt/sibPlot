@@ -1,0 +1,31 @@
+table,field,recoField
+metadata,levantamiento,^levantamientos?$
+metadata,municipio,^municipio$
+metadata,localidad,^localidad$;^sector$
+metadata,altitud,^altitud( *\(?m\.?\)?)?$;^altura( *\(m\.?\))?$
+metadata,area,^[aá]rea( ?\(?m[2²]\)?( ?lev\.?)?)?$;^superficie( ?\(?m[2²]\)?( ?lev\.?)?)?$
+metadata,franja,^franja$
+metadata,coordenada_n,^coordenada[ _]n$
+metadata,coordenada_w,^coordenada[ _]w$
+metadata,riqueza,^riqueza$;^n(o\.?|um\.?|[uú]mero) ?(de)? Especies?$;^Morfotipos spp/lev$
+metadata,num_individuos,^num_individuos$;^ind/lev$
+metadata,typeCoverage,^typecoverage$
+metadata,tabla,^tabla$
+meta_extra,gran_ambiente,^gran[_ ]ambiente$
+meta_extra,Clase,^(formaci[óo]n )?clase$
+meta_extra,orden,^(formaci[óo]n )?orden$
+meta_extra,alianza,^(formaci[óo]n )?alianza$
+meta_extra,tipo_general,^tipo[_ ]general$
+meta_extra,asociacion,^asociaci[oó]n(es)?$
+meta_extra,levantamiento,^levantamientos?$;^(lev ?-? ?)?parcelas?$
+meta_extra,area,^[aá]rea de muestreo( ?\(?m2\)?\*?)?$;^[aá]rea( ?\(?m[2²]\)?\*?( ?lev\.?)?)?$;^sup(erficie)?\.?( ?\(?m[2²]\)?( ?lev\.?)?)?$
+meta_extra,mpio,^m(unici)?pio\.?$
+meta_extra,depto,^de?p(artamen)?to\.?$
+meta_extra,localidad,^localidad$;^sector$;^cercan[íi]a ?1$;^sitio$
+meta_extra,localidad2,^localidad ?2$;^sector ?2$;^cercan[íi]a ?2$
+meta_extra,altitud,^altitud( *\(?m\.?\)?)?$;^altura( *\(m\.?\))?$;^alt\.?( *\(?m\.?\)?)?$
+meta_extra,latitud,^lat\.?(itud)?$
+meta_extra,longitud,^long\.?(itud)?$
+meta_extra,fuente,^(observaci[oó]n(es)? ?-? ?)?fuente$
+meta_extra,region_vida,^region_vida$;^regi[oó]n de vida$
+meta_extra,vereda,^vereda$

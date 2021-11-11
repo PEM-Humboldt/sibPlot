@@ -13,8 +13,9 @@
 *.knit.md
 
 
-# pdf files
+# pdf and Html files
 *.pdf
+/functions/*.html
 
 # Excel lock files
 *.xlsx#
