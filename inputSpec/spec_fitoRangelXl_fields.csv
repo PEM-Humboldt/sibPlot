@@ -1,0 +1,12 @@
+table,field,recoField,typeof,example,maxChar,minNum,maxNum,mandatory,includedFormat,regex
+metadata,levantamiento,^levantamientos?$,character,,,,,T,,
+metadata,municipio,^municipio$,character,,,,,F,,
+metadata,localidad,^localidad$;^sector$,character,,,,,F,,
+metadata,altitud,^altitud( *\(?m\.?\)?)?$;^altura( *\(m\.?\))?$,integer,,,,,F,,
+metadata,area,^[aá]rea( ?\(?m[2²]\)?( ?lev\.?)?)?$;^superficie( ?\(?m[2²]\)?( ?lev\.?)?)?$,character,,50,,,F,,
+metadata,franja,^franja$,character,,,,,F,,
+metadata,coordenada_n,^coordenada[ _]n$,character,,,,,F,,"^[0-9] ?[ºº] ?[0-9]{1,2} ?[‘´]( ?[0-9]{1,2}[,.][0-9]{1,2}(“|’’|´´))?$"
+metadata,coordenada_w,^coordenada[ _]w$,character,,,,,F,,"^[0-9] ?[ºº] ?[0-9]{1,2} ?[‘´]( ?[0-9]{1,2}[,.][0-9]{1,2}(“|’’|´´))?$"
+metadata,riqueza,^riqueza$;^n(o\.?|um\.?|[uú]mero) ?(de)? Especies?$;^Morfotipos spp/lev$,character,,,,,F,,
+metadata,num_individuos,^num_individuos$;^ind/lev$,character,,,,,F,,
+metadata,typeCoverage,^typecoverage$,character,,,,,T,,

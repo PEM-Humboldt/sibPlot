@@ -1,0 +1,39 @@
+## ------------------------------------------------------------------------------------------------------------------------------------------
+dev=T
+if(dev)
+{
+  require(openxlsx)
+}
+
+
+
+# the function xl_sep_table allows to find various table in a excel sheet and to separate them, it then store them in a list which is the return of the function.
+# Note: work only with tables separated in lines, not in columns
+
+
+xl_sep_table<-function(file,sheet)
+{
+  wb<-loadWorkbook(file)
+  all_sheet<-read.xlsx(xlsxFile = wb , sheet = sheet , skipEmptyRows = F , skipEmptyCols = F , colNames = F )
+  # finding the starting and ending rows
+  emptyRows<-apply(all_sheet,1,function(x)all(is.na(x)))
+  tabs<-data.frame(
+    begin=which(!emptyRows&c(T,emptyRows[1:(length(emptyRows)-1)])),
+    end=which(!emptyRows&c(emptyRows[2:length(emptyRows)],T))
+  )
+  NCOL<-ncol(all_sheet)
+  #making regions in the workbook
+  tabs$name<-paste("tab",1:nrow(tabs),sep="")
+  command_namedRegion<-apply(tabs,1,function(x,sh,nc)
+    {
+      paste("createNamedRegion(wb = wb , sheet =\"",sheet,"\"",
+            ",name =\"",x[3],"\"",
+            ",rows =",x[1],":",x[2],
+            ",cols =,1:",nc,")",sep="")
+    },sh=sheet,nc=NCOL)
+  for(i in command_namedRegion)
+  {eval(parse(text=i))}
+  # reading the regions and returning them in a list
+  return(lapply(tabs$name,function(x,wb,sh)read.xlsx(xlsxFile=wb,sheet=sh,namedRegion = x),wb=wb,sh=sheet))
+}
+
