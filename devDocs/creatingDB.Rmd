@@ -74,6 +74,8 @@ So, in order to begin here, users will need in postgreSQL to define the roles an
 
 # Using dm for representing a database
 
+
+
 ```{r}
 require(dm)
 eval(conFlo_ra)
@@ -81,6 +83,28 @@ eval(conFlo_ra)
 dm_object%>%
   dm_draw
 ```
+
+# Schemas
+
+## Schema issues
+
+Usually I would have separated the tables in many schemas, but there are 2 main issues (none of them is unsolvable though):
+
+1. SQLite does not accept schemas (but can have 2 databases/files working at the same time if needed)
+1. Many software (including the *dm* package) do not work well with tables located in different schemas, but we might make them work by writing some patches in this 
+
+So my point here is that we should keep the separations between tables at a minimum for now...
+
+All tables in a same schema will force us to choose well the names of the tables, but it might be for the best and could make it easier for people who are starting their journey toward SQL.
+I believe we should only separate the data which has no interaction between each other, but I am still doubting even that:
+
+* All the real data in one place
+* All the specs in another place 
+* all the authorization/processes/installation/administrations in another place (what might be tricky afterward is to link the person from the projects to the persons having authorizations)
+
+# Tables
+
+
 
 
 
