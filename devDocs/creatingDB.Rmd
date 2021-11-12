@@ -1,0 +1,86 @@
+---
+title: "Database creation in the sibPlot project"
+author: "Marius Bottin"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+   pdf_document:
+     toc: true
+     toc_depth: 5
+     number_sections: true
+     latex_engine: xelatex
+
+fontsize: 11pt
+geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
+linkcolor: gray
+urlcolor: blue
+citecolor: cyan
+header-includes:
+  - \usepackage{colortbl}
+  - \usepackage{xcolor}       
+  - \usepackage{lscape}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+--- 
+
+```{r, setup}
+require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
+options(knitr.kable.NA = '---')
+```
+
+
+# DataBase Management Systems
+
+DataBase Management System are pieces of software which may be used in order to build the "database" part of an information system.
+It is important not to confuse with the DBMS based on SQL (Structured Query Language), with SQL itself which is the informatic language used to interact with some of the DBMS.
+
+In the *sibPlot* project, and the packages that we will build, we will integrate 2 SGDB based on SQL:
+
+1. postgreSQL with the postgis extension
+2. SQLite with the spatialite extension
+
+The rationale behind this choice is that SQLite is a lightweight, simple file-based SGDB which might be a very reasonable choice for any biologist who want to create his database in a computer, without worrying about rights and access on the different part of the database.
+However SQLite is not a sufficient solution for an organization which want to build a centralized database with clear rights, access and permissions protocols, that is where postgreSQL becomes a better choice.
+
+Both the SGDB are based on SQL, in slightly different flavors, which may be managed through R, thanks to the *RPostgreSQL* and *SQLite* packages.
+Connections are particular objects in R, that can be created through the *DBI* packages.
+This makes all the management through R very easy, because the connection can be made outside of the R package we will develop, and the package will just have to check whether the connection is a SQLite or PostgreSQL one in case there are differences in the languages, which should not be often, but might happen, particularly in the case of spatial command through Spatialite or postgis...
+
+
+The functions we will create should not make the configuration of the database servers, even though it might be useful to have functions reading them.
+Indeed, there might be some security issues and therefore the configuration should be made by people knowing what they are doing.
+The people who knows what they are doing in SGBD usually know SQL, and Bash, and should not need a R-package to simplify the process.
+
+So what will do the package is helping organize the data and simplifying the workflow between local files and the database
+
+# Creating the database
+
+In SQLite, the database is all contained in a file, the process is quite simple.
+On the other hand, in postgreSQL, creating the database is a much more complex process, with the need of a superuser to create the database...
+
+So, in order to begin here, users will need in postgreSQL to define the roles and to have access to a superuser (or at least to one user having the createDB permission), and another user afterward for the writing/reading operations (in order not to make everything with a superuser, which is not a good idea).
+
+## Process in pure SQL
+
+
+## Interfacing the database creation with R
+
+
+
+# Using dm for representing a database
+
+```{r}
+require(dm)
+eval(conFlo_ra)
+(dm_object<-dm_from_src(db,schema=c("main","taxon","vecmaps")))
+dm_object%>%
+  dm_draw
+```
+
+
+
