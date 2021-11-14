@@ -65,18 +65,146 @@ On the other hand, in postgreSQL, creating the database is a much more complex p
 
 So, in order to begin here, users will need in postgreSQL to define the roles and to have access to a superuser (or at least to one user having the createDB permission), and another user afterward for the writing/reading operations (in order not to make everything with a superuser, which is not a good idea).
 
-## Process in pure SQL
 
 
-## Interfacing the database creation with R
+## PostgreSQL in linux
+
+Let's consider a case where the postgresql configuration is in a blank state (here is an example running a debian).
+
+We will not enter too much into details but users need a valid configuration file.
+A simple connection configuration for a local database (not available on the network) is to trust the local connection as "postgres" (super-user for database management).
+
+In my debian installation, it consisted simply to change "peer" for "trust" in the line starting by "local".
+
+There are 2 other options:
+
+* Creating an administrative role with another user, which has the "createDB" role
+* Creating a login system for user postgres
+
+"*con_su*" is a connection to the database postgres, as the postgres user, but instead of postgres, I found that creating a "sib_admin" role could resolve some problems later on
+
+```sql
+CREATE ROLE sib_adm WITH CREATEDB CREATEROLE LOGIN PASSWORD 'sib';
+```
 
 
+```{r}
+#con_su<- dbConnect(drv="PostgreSQL",db="postgres",user="postgres")
+sib_adm<- dbConnect(drv= "PostgreSQL", db= "postgres", user= "sib_adm", password= "sib")
+```
+
+
+
+Then it is possible to get the roles in the database cluster, from the postgres database.
+
+With the following command, we can see see the users and their permissions in the cluster:
+
+```{r}
+dbGetQuery(sib_adm,"SELECT r.rolname, r.rolsuper, r.rolinherit,
+  r.rolcreaterole, r.rolcreatedb, r.rolcanlogin,
+  ARRAY(SELECT b.rolname
+        FROM pg_catalog.pg_auth_members m
+        JOIN pg_catalog.pg_roles b ON (m.roleid = b.oid)
+        WHERE m.member = r.oid) as memberof
+FROM pg_catalog.pg_roles r
+WHERE r.rolname !~ '^pg_'
+ORDER BY 1;
+")%>%
+  kable(booktab=T)
+```
+
+
+If here, the user that you want to use for working with the database does not appear, it means that you need to create him.
+
+
+The following functions allow to create roles in postgres (the first one is intended creating the group of sib users, the second one the users inside the group).
+Of course it is still possible for advanced SQL users to make a more complex user model for managing authorizations.
+
+*Note that on the long term it might be useful to make a simpler auth2 system there, but I do not know about that so, maybe it is not a good idea*
+
+
+
+```{r}
+source("../functions/createSqlRole.R",echo = T,max.deparse.length = Inf,prompt.echo = "")
+```
+
+**It does not work, so I make it return the query for now:**
+
+```{r}
+create_sib_role(sib_adm, rolName = "sib", createDb = T)
+create_sib_role(sib_adm, rolName="sib_user",passwd="pw",inGroup = 'sib')
+```
+
+### Information on connections and users
+
+```{r}
+source(file= "../functions/infoUserConnection.R",echo = T,max.deparse.length = Inf,prompt.echo = "")
+```
+
+
+
+### Tablespaces and database
+
+In PostgreSQL, database may be stored in directories defined by the users, it may be useful when the devices where the operating system are installed are space-limited. 
+Note that this directory will only be read by the PostgreSQL system, it is impossible to make sense of the data there from any other software!
+
+Also, for creating a tablespace, you need to be a superuser, so it means that a superuser need to give the superuser attribute to sib_adm, or that you need to connect as postgres. (Note that the postgres user would need the rights on the directory).
+
+**For all these reasons, the most simple solution for basic users would be to just skip this step, and let the system store the data whereever it does automatically**
+
+
+```{r}
+con_postgres<- dbConnect(dbDriver("PostgreSQL"),dbname="postgres",user="postgres")
+```
+
+```{r}
+source(file= "../functions/sql_tablespace_createDb.R",echo = T,max.deparse.length = Inf,prompt.echo = "")
+```
+
+```{r}
+sib_create_tablespace(con_postgres, "sib_plot", "/mnt/rapiddb/sib_plot")
+dbSendStatement(con_postgres,"GRANT ALL ON TABLESPACE sib_plot TO sib_adm")
+```
+
+```{r}
+dbDisconnect(con_postgres)
+```
+
+
+```{r}
+dbSendStatement(sib_adm,"GRANT sib TO sib_adm")
+sib_create_database(sib_adm,nameDb = "sib_plot",owner = "sib",nameTableSpace = "sib_plot")
+```
+
+
+```{r}
+dbDisconnect(sib_adm)
+```
+
+
+## SQLite
+
+In SQLite user and authorization management is much simpler, because the system does not implement all the authorization policies that you can find in PostgreSQL (you may implement authorization schemes in your database, but nothing is implemented in the basic creation of the database).
+
+
+Then creating the database (or connecting to the database) is simply made through the dbConnect function.
+
+```{r}
+require(RSQLite)
+dbConnect(SQLite(),"../../SQLite/sib_plot_data.sqlite3", extended_types=T)
+```
+
+
+
+
+
+#
 
 # Using dm for representing a database
 
 
 
-```{r}
+```r
 require(dm)
 eval(conFlo_ra)
 (dm_object<-dm_from_src(db,schema=c("main","taxon","vecmaps")))
