@@ -8,7 +8,7 @@ output:
      toc_depth: 5
      number_sections: true
      latex_engine: xelatex
-
+always_allow_html: true
 fontsize: 11pt
 geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
 linkcolor: gray
@@ -29,7 +29,7 @@ knitr::knit_hooks$set(chunk = function(x, options) {
   x <- def.chunk.hook(x, options)
   ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
 })
-opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
+opts_chunk$set(cache=F,fig.path="../../Fig/creatingDB",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
 options(knitr.kable.NA = '---')
 ```
 
@@ -128,7 +128,6 @@ Of course it is still possible for advanced SQL users to make a more complex use
 source("../functions/createSqlRole.R",echo = T,max.deparse.length = Inf,prompt.echo = "")
 ```
 
-**It does not work, so I make it return the query for now:**
 
 ```{r}
 create_sib_role(sib_adm, rolName = "sib", createDb = T)
@@ -191,26 +190,31 @@ Then creating the database (or connecting to the database) is simply made throug
 
 ```{r}
 require(RSQLite)
-dbConnect(SQLite(),"../../SQLite/sib_plot_data.sqlite3", extended_types=T)
+sib_lite<- dbConnect(SQLite(),"../../SQLite/sib_plot_data.sqlite3", extended_types=T)
+dbDisconnect(sib_lite)
 ```
 
 
+# Extensions
 
+## PostgreSQL`
 
-
-#
-
-# Using dm for representing a database
-
-
-
-```r
-require(dm)
-eval(conFlo_ra)
-(dm_object<-dm_from_src(db,schema=c("main","taxon","vecmaps")))
-dm_object%>%
-  dm_draw
+```{r}
+con_postgres<- dbConnect(dbDriver("PostgreSQL"),dbname="sib_plot",user="postgres")
+sib_plot<- dbConnect(drv=PostgreSQL(),user="sib_user",password="pw",dbname="sib_plot")
 ```
+
+
+```{sql, connection=con_postgres, eval=!"postgis" %in% dbGetQuery(con_postgres,"SELECT extname FROM pg_catalog.pg_extension")$extname}
+CREATE EXTENSION postgis;
+CREATE EXTENSION postgis_raster;
+```
+
+```{r}
+dbDisconnect(con_postgres)
+```
+
+
 
 # Schemas
 
@@ -230,9 +234,87 @@ I believe we should only separate the data which has no interaction between each
 * All the specs in another place 
 * all the authorization/processes/installation/administrations in another place (what might be tricky afterward is to link the person from the projects to the persons having authorizations)
 
+
+
+
+
+## PostgreSQL
+
+```{r}
+createSchema<-!"main"%in%dbGetQuery(sib_plot,"SELECT schema_name FROM information_schema.schemata")$schema_name
+```
+
+
+```{sql, connection=sib_plot, eval=createSchema}
+CREATE SCHEMA IF NOT EXISTS main AUTHORIZATION sib;
+CREATE SCHEMA IF NOT EXISTS spec AUTHORIZATION sib;
+CREATE SCHEMA IF NOT EXISTS adm AUTHORIZATION sib;
+```
+
+
+
 # Tables
 
+Creating the tables could be done through spec files on the long term.
+It would allow to make R functions for adapting the code to the SQL drivers (PostgreSQL or SQLite)
+However, right now, making the database directly might be the simple way to make it work, and translating a real database into a spec may actually be an efficient way.
+
+So what I will do is to make it in raw SQL code and then transform it.
+This means we will focus on PostgreSQL for now, because while the creation was more complicated, it will become the easiest solution now for me (might not be the case for SQL beginners though!)
 
 
 
+```{sql, connection=sib_plot, code=readLines("../notR/sql_database/creationdb.sql")}
+
+```
+
+
+
+# Stored procedure
+
+There is no way to create SQL stored procedure in SQLite.
+SQLite accept however function created in C, Python etc.
+
+On the long term, we might want to write some procedures in these languages.
+However, right now we might not be able to create the SQLite extensions...
+
+
+
+
+
+# Using dm for representing the relational database
+
+
+
+```{r}
+save_png <- function(plot, path){
+  DiagrammeRsvg::export_svg(plot) %>%
+    charToRaw() %>%
+    rsvg::rsvg() %>%
+    png::writePNG(path)
+}
+require(dm)
+(dm_object<-dm_from_src(sib_plot,schema="main"))
+A<- dm_object%>%
+  dm_draw(view_type = "all",column_types = T)
+save_png(A,"../../Fig/graph_database_main.png")
+```
+
+![graph](../../Fig/graph_database_main.png)
+
+
+
+# Things that might not work with SQLite for now
+
+
+* enforcing data type from the database
+* stored procedure
+   + getting the species/genus/family level from the taxonomy tables
+* spatial data: making spatialite work in the RSQLite package seems to be complicated... but there is a package in GitHub which allows to do it
+* row level permissions
+
+```{r}
+if(!interactive())
+  dbDisconnect(sib_plot)
+```
 
