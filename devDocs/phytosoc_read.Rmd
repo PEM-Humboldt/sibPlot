@@ -2,8 +2,6 @@
 title: "Analyzing and reading the phytosociological files"
 author: "Marius Bottin"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
-bibliography: "/home/marius/Travail/Bibliotheque/jabref/UNAL.bib"
-csl: "/home/marius/Travail/Bibliotheque/CSL/chicago.csl"
 output: 
    pdf_document:
      toc: true

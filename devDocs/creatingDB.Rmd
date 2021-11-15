@@ -1,0 +1,327 @@
+---
+title: "Database creation in the sibPlot project"
+author: "Marius Bottin"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+   pdf_document:
+     toc: true
+     toc_depth: 5
+     number_sections: true
+     latex_engine: xelatex
+always_allow_html: true
+fontsize: 11pt
+geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
+linkcolor: gray
+urlcolor: blue
+citecolor: cyan
+header-includes:
+  - \usepackage{colortbl}
+  - \usepackage{xcolor}       
+  - \usepackage{lscape}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+--- 
+
+```{r, setup}
+require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+opts_chunk$set(cache=F,fig.path="../../Fig/creatingDB",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
+options(knitr.kable.NA = '---')
+```
+
+
+# DataBase Management Systems
+
+DataBase Management System are pieces of software which may be used in order to build the "database" part of an information system.
+It is important not to confuse with the DBMS based on SQL (Structured Query Language), with SQL itself which is the informatic language used to interact with some of the DBMS.
+
+In the *sibPlot* project, and the packages that we will build, we will integrate 2 SGDB based on SQL:
+
+1. postgreSQL with the postgis extension
+2. SQLite with the spatialite extension
+
+The rationale behind this choice is that SQLite is a lightweight, simple file-based SGDB which might be a very reasonable choice for any biologist who want to create his database in a computer, without worrying about rights and access on the different part of the database.
+However SQLite is not a sufficient solution for an organization which want to build a centralized database with clear rights, access and permissions protocols, that is where postgreSQL becomes a better choice.
+
+Both the SGDB are based on SQL, in slightly different flavors, which may be managed through R, thanks to the *RPostgreSQL* and *SQLite* packages.
+Connections are particular objects in R, that can be created through the *DBI* packages.
+This makes all the management through R very easy, because the connection can be made outside of the R package we will develop, and the package will just have to check whether the connection is a SQLite or PostgreSQL one in case there are differences in the languages, which should not be often, but might happen, particularly in the case of spatial command through Spatialite or postgis...
+
+
+The functions we will create should not make the configuration of the database servers, even though it might be useful to have functions reading them.
+Indeed, there might be some security issues and therefore the configuration should be made by people knowing what they are doing.
+The people who knows what they are doing in SGBD usually know SQL, and Bash, and should not need a R-package to simplify the process.
+
+So what will do the package is helping organize the data and simplifying the workflow between local files and the database
+
+# Creating the database
+
+In SQLite, the database is all contained in a file, the process is quite simple.
+On the other hand, in postgreSQL, creating the database is a much more complex process, with the need of a superuser to create the database...
+
+So, in order to begin here, users will need in postgreSQL to define the roles and to have access to a superuser (or at least to one user having the createDB permission), and another user afterward for the writing/reading operations (in order not to make everything with a superuser, which is not a good idea).
+
+
+
+## PostgreSQL in linux
+
+Let's consider a case where the postgresql configuration is in a blank state (here is an example running a debian).
+
+We will not enter too much into details but users need a valid configuration file.
+A simple connection configuration for a local database (not available on the network) is to trust the local connection as "postgres" (super-user for database management).
+
+In my debian installation, it consisted simply to change "peer" for "trust" in the line starting by "local".
+
+There are 2 other options:
+
+* Creating an administrative role with another user, which has the "createDB" role
+* Creating a login system for user postgres
+
+"*con_su*" is a connection to the database postgres, as the postgres user, but instead of postgres, I found that creating a "sib_admin" role could resolve some problems later on
+
+```sql
+CREATE ROLE sib_adm WITH CREATEDB CREATEROLE LOGIN PASSWORD 'sib';
+```
+
+
+```{r}
+#con_su<- dbConnect(drv="PostgreSQL",db="postgres",user="postgres")
+sib_adm<- dbConnect(drv= "PostgreSQL", db= "postgres", user= "sib_adm", password= "sib")
+```
+
+
+
+Then it is possible to get the roles in the database cluster, from the postgres database.
+
+With the following command, we can see see the users and their permissions in the cluster:
+
+```{r}
+dbGetQuery(sib_adm,"SELECT r.rolname, r.rolsuper, r.rolinherit,
+  r.rolcreaterole, r.rolcreatedb, r.rolcanlogin,
+  ARRAY(SELECT b.rolname
+        FROM pg_catalog.pg_auth_members m
+        JOIN pg_catalog.pg_roles b ON (m.roleid = b.oid)
+        WHERE m.member = r.oid) as memberof
+FROM pg_catalog.pg_roles r
+WHERE r.rolname !~ '^pg_'
+ORDER BY 1;
+")%>%
+  kable(booktab=T)
+```
+
+
+If here, the user that you want to use for working with the database does not appear, it means that you need to create him.
+
+
+The following functions allow to create roles in postgres (the first one is intended creating the group of sib users, the second one the users inside the group).
+Of course it is still possible for advanced SQL users to make a more complex user model for managing authorizations.
+
+*Note that on the long term it might be useful to make a simpler auth2 system there, but I do not know about that so, maybe it is not a good idea*
+
+
+
+```{r}
+source("../functions/createSqlRole.R",echo = T,max.deparse.length = Inf,prompt.echo = "")
+```
+
+
+```{r}
+create_sib_role(sib_adm, rolName = "sib", createDb = T)
+create_sib_role(sib_adm, rolName="sib_user",passwd="pw",inGroup = 'sib')
+```
+
+### Information on connections and users
+
+```{r}
+source(file= "../functions/infoUserConnection.R",echo = T,max.deparse.length = Inf,prompt.echo = "")
+```
+
+
+
+### Tablespaces and database
+
+In PostgreSQL, database may be stored in directories defined by the users, it may be useful when the devices where the operating system are installed are space-limited. 
+Note that this directory will only be read by the PostgreSQL system, it is impossible to make sense of the data there from any other software!
+
+Also, for creating a tablespace, you need to be a superuser, so it means that a superuser need to give the superuser attribute to sib_adm, or that you need to connect as postgres. (Note that the postgres user would need the rights on the directory).
+
+**For all these reasons, the most simple solution for basic users would be to just skip this step, and let the system store the data whereever it does automatically**
+
+
+```{r}
+con_postgres<- dbConnect(dbDriver("PostgreSQL"),dbname="postgres",user="postgres")
+```
+
+```{r}
+source(file= "../functions/sql_tablespace_createDb.R",echo = T,max.deparse.length = Inf,prompt.echo = "")
+```
+
+```{r}
+sib_create_tablespace(con_postgres, "sib_plot", "/mnt/rapiddb/sib_plot")
+dbSendStatement(con_postgres,"GRANT ALL ON TABLESPACE sib_plot TO sib_adm")
+```
+
+```{r}
+dbDisconnect(con_postgres)
+```
+
+
+```{r}
+dbSendStatement(sib_adm,"GRANT sib TO sib_adm")
+sib_create_database(sib_adm,nameDb = "sib_plot",owner = "sib",nameTableSpace = "sib_plot")
+```
+
+
+```{r}
+dbDisconnect(sib_adm)
+```
+
+
+## SQLite
+
+In SQLite user and authorization management is much simpler, because the system does not implement all the authorization policies that you can find in PostgreSQL (you may implement authorization schemes in your database, but nothing is implemented in the basic creation of the database).
+
+
+Then creating the database (or connecting to the database) is simply made through the dbConnect function.
+
+```{r}
+require(RSQLite)
+sib_lite<- dbConnect(SQLite(),"../../SQLite/sib_plot_data.sqlite3", extended_types=T)
+dbDisconnect(sib_lite)
+```
+
+
+# Extensions
+
+## PostgreSQL`
+
+```{r}
+con_postgres<- dbConnect(dbDriver("PostgreSQL"),dbname="sib_plot",user="postgres")
+sib_plot<- dbConnect(drv=PostgreSQL(),user="sib_user",password="pw",dbname="sib_plot")
+```
+
+
+```{sql, connection=con_postgres, eval=!"postgis" %in% dbGetQuery(con_postgres,"SELECT extname FROM pg_catalog.pg_extension")$extname}
+CREATE EXTENSION postgis;
+CREATE EXTENSION postgis_raster;
+```
+
+```{r}
+dbDisconnect(con_postgres)
+```
+
+
+
+# Schemas
+
+## Schema issues
+
+Usually I would have separated the tables in many schemas, but there are 2 main issues (none of them is unsolvable though):
+
+1. SQLite does not accept schemas (but can have 2 databases/files working at the same time if needed)
+1. Many software (including the *dm* package) do not work well with tables located in different schemas, but we might make them work by writing some patches in this 
+
+So my point here is that we should keep the separations between tables at a minimum for now...
+
+All tables in a same schema will force us to choose well the names of the tables, but it might be for the best and could make it easier for people who are starting their journey toward SQL.
+I believe we should only separate the data which has no interaction between each other, but I am still doubting even that:
+
+* All the real data in one place
+* All the specs in another place 
+* all the authorization/processes/installation/administrations in another place (what might be tricky afterward is to link the person from the projects to the persons having authorizations)
+
+
+
+
+
+## PostgreSQL
+
+```{r}
+createSchema<-!"main"%in%dbGetQuery(sib_plot,"SELECT schema_name FROM information_schema.schemata")$schema_name
+```
+
+
+```{sql, connection=sib_plot, eval=createSchema}
+CREATE SCHEMA IF NOT EXISTS main AUTHORIZATION sib;
+CREATE SCHEMA IF NOT EXISTS spec AUTHORIZATION sib;
+CREATE SCHEMA IF NOT EXISTS adm AUTHORIZATION sib;
+```
+
+
+
+# Tables
+
+Creating the tables could be done through spec files on the long term.
+It would allow to make R functions for adapting the code to the SQL drivers (PostgreSQL or SQLite)
+However, right now, making the database directly might be the simple way to make it work, and translating a real database into a spec may actually be an efficient way.
+
+So what I will do is to make it in raw SQL code and then transform it.
+This means we will focus on PostgreSQL for now, because while the creation was more complicated, it will become the easiest solution now for me (might not be the case for SQL beginners though!)
+
+**Note: in postgres, it might be useful to create a trigger for assigning all new tables to the owner "sib"... directly on table/view creation**
+**But I guess we'll manage that later, when considering the authorization issues on the data**
+
+
+```{sql, connection=sib_plot, code=readLines("../notR/sql_database/creationdb.sql")}
+```
+
+```{sql, connection=sib_plot, code=readLines("../notR/sql_database/spatialFields.sql")}
+```
+
+```{sql, connection=sib_plot, code=readLines("../notR/sql_database/insertDictionaries.sql")}
+```
+
+
+
+# Stored procedure
+
+There is no way to create SQL stored procedure in SQLite.
+SQLite accept however function created in C, Python etc.
+
+On the long term, we might want to write some procedures in these languages.
+However, right now we might not be able to create the SQLite extensions...
+
+
+
+
+
+# Using dm for representing the relational database
+
+
+
+```{r}
+save_png <- function(plot, path){
+  DiagrammeRsvg::export_svg(plot) %>%
+    charToRaw() %>%
+    rsvg::rsvg() %>%
+    png::writePNG(path)
+}
+require(dm)
+(dm_object<-dm_from_src(sib_plot,schema="main"))
+A<- dm_object%>%
+  dm_draw(view_type = "all",column_types = T)
+save_png(A,"../../Fig/graph_database_main.png")
+```
+
+![graph](../../Fig/graph_database_main.png)
+
+
+
+# Things that might not work with SQLite for now
+
+
+* enforcing data type from the database
+* stored procedure
+   + getting the species/genus/family level from the taxonomy tables
+* spatial data: making spatialite work in the RSQLite package seems to be complicated... but there is a package in GitHub which allows to do it
+* row level permissions
+
+```{r}
+if(!interactive())
+  dbDisconnect(sib_plot)
+```
+

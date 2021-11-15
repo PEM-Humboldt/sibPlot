@@ -24,7 +24,9 @@
 vignettes/*.html
 vignettes/*.pdf
 *.pdf
-/functions/*.html
+devDocs/*.html
+devDocs/*.log
+devDocs/*.tex
 
 # OAuth2 token, see https://github.com/hadley/httr/releases/tag/v0.3
 .httr-oauth
