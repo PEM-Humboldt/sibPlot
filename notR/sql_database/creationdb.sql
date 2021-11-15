@@ -61,7 +61,7 @@ CREATE TABLE main.partic
   comment text,
   email text,
   UNIQUE (cd_pers,cd_ev,role)
-  --- note: not sure whether to put institutions, sponsors here
+  --- note: not sure whether to put institutions, sponsors here or in a separate table
 );
 
 
@@ -116,10 +116,20 @@ CREATE TABLE main.plot_meta_verbatim
   cd_input integer REFERENCES main.event(id_ev)
 );
 
+
+
+CREATE TABLE main.sampling_unit
+(
+  id_su serial PRIMARY KEY,
+  name_su serial PRIMARY KEY,
+  type_hier_su varchar(50),
+  cd_input integer REFERENCES main.event(id_ev) NOT NULL
+);
+
 CREATE TABLE main.ind_census
 (
   id_ind serial PRIMARY KEY,
-  cd_plot integer REFERENCES main.plot(id_plot),
+  cd_su integer REFERENCES main.sampling_unit(id_su),
   code varchar(8),
   cd_input integer REFERENCES main.event(id_ev) NOT NULL,
   cd_event integer REFERENCES main.event(id_ev) NOT NULL
@@ -129,7 +139,7 @@ CREATE TABLE main.tag_census
 (
   id_tag serial PRIMARY KEY,
   cd_ind integer REFERENCES main.ind_census(id_ind) NOT NULL,
-  cd_plot integer REFERENCES main.plot(id_plot) NOT NULL,
+  cd_su integer REFERENCES main.plot(id_su) NOT NULL,
   tag varchar(10),
   subplot integer,
   ramet integer,
