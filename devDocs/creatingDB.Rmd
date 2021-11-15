@@ -262,10 +262,17 @@ However, right now, making the database directly might be the simple way to make
 So what I will do is to make it in raw SQL code and then transform it.
 This means we will focus on PostgreSQL for now, because while the creation was more complicated, it will become the easiest solution now for me (might not be the case for SQL beginners though!)
 
+**Note: in postgres, it might be useful to create a trigger for assigning all new tables to the owner "sib"... directly on table/view creation**
+**But I guess we'll manage that later, when considering the authorization issues on the data**
 
 
 ```{sql, connection=sib_plot, code=readLines("../notR/sql_database/creationdb.sql")}
+```
 
+```{sql, connection=sib_plot, code=readLines("../notR/sql_database/spatialFields.sql")}
+```
+
+```{sql, connection=sib_plot, code=readLines("../notR/sql_database/insertDictionaries.sql")}
 ```
 
 
