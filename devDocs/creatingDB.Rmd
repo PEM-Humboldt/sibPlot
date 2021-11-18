@@ -294,12 +294,7 @@ However, right now we might not be able to create the SQLite extensions...
 
 
 ```{r}
-save_png <- function(plot, path){
-  DiagrammeRsvg::export_svg(plot) %>%
-    charToRaw() %>%
-    rsvg::rsvg() %>%
-    png::writePNG(path)
-}
+source("../functions/export_svg.R")
 require(dm)
 (dm_object<-dm_from_src(sib_plot,schema="main"))
 A<- dm_object%>%

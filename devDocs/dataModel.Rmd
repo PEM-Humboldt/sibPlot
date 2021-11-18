@@ -1,0 +1,534 @@
+---
+title: "Description of the data model in the sib plot information system"
+author: "Marius Bottin"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+   pdf_document:
+     toc: true
+     toc_depth: 5
+     number_sections: true
+     latex_engine: xelatex
+always_allow_html: true
+fontsize: 11pt
+geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
+linkcolor: gray
+urlcolor: blue
+citecolor: cyan
+header-includes:
+  - \usepackage{colortbl}
+  - \usepackage{xcolor}       
+  - \usepackage{lscape}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+--- 
+
+```{r, setup}
+require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+opts_chunk$set(cache=F,fig.path="../../Fig/data_model",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
+options(knitr.kable.NA = '---')
+```
+
+**Connection as database admin (to the postgres database)**
+
+```{r}
+sib_adm<- dbConnect(PostgreSQL(),dbname="sib_plot",user="sib_adm",password="sib")
+```
+
+Deleting the main schema for having a cleanstate:
+
+```{r}
+dbSendStatement(sib_adm,"DROP SCHEMA main CASCADE")
+dbSendStatement(sib_adm,"CREATE SCHEMA main AUTHORIZATION sib")
+dbDisconnect(sib_adm)
+```
+
+```{r}
+sib_plot <- dbConnect(PostgreSQL(), user = "sib_user", dbname = "sib_plot", password = "pw")
+```
+
+```{bash}
+psql  -f ../notR/sql_database/creationdb.sql -U sib_user -d sib_plot # -a
+psql  -f ../notR/sql_database/spatialFields.sql -U sib_user -d sib_plot # -a
+psql  -f ../notR/sql_database/insertDictionaries.sql -U sib_user -d sib_plot # -a 
+```
+
+```{r, out.height="40cm"}
+source("../functions/export_svg.R")
+require(dm)
+(dm_object<-dm_from_src(sib_plot,schema="main"))
+all_types<- c("event","plot", "gp_plot", "dic_tax_level", "taxonomy", "tax_ident", "dic_type_ev","dic_activity","pers","partic","dic_type_gp","dic_abund","plot_meta_verbatim","plot_spat_polyg","plot_spat_pt","sampling_unit")
+only_pp<- c("tag_mortality","xy_tag","ind_census","tag_census","tag_measurement","tag_status")
+only_phyto<- c("compo")
+only_syntax<- c("syntaxonomy","dic_syntax_level","sp_carac_syn","plot_syn")
+dm_object<- dm_set_colors(dm_object,
+                          red=all_of(all_types),
+                          green=all_of(only_pp),
+                          lightblue=all_of(only_phyto),
+                          darkblue=all_of(only_syntax)
+                          )
+A<- dm_draw(dm_object, view_type = "all")
+B<- save_png(A,"../../Fig/graph_database_main.png")
+img<- png::readPNG(B)
+grid::grid.raster(img)
+```
+
+
+
+# Generalities
+
+```{r fig.cap="\\label{fig:data_mod_comp}Relational Data Model in the sibPlot database with phytosociological data and permanent plots. Tables in red are general tables, green tables are for the permanent plot submodel, lightblue tables are tables for the composition data submodel (without individual data but abundances/coverage of species), darkblue tables are part of the phytosociological (with syntaxonomic information)."}
+knitr::include_graphics(B)
+```
+
+Useful functions to analyse the database specifications are found in the file [extractPostgresSpec.R](../functions/extractPostgresSpec.R)
+
+```{r}
+source("../functions/extractPostgresSpec.R")
+```
+
+
+# Shared tables
+
+The "shared tables" are the basic tables of the model (red in fig \ref{fig:data_mod_comp}), they are the center of the model and are parts of all the sub- data models.
+
+## The *event* system
+
+The event table is the central table of the system: it contains all the events that contributed to the data in the database (field events, lab events and data events).
+
+The specifications of the table is:
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","event")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainEvent} Column specifications of the table main.event")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","event")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainEvent}Extra-constraints for the table main.event")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+
+
+
+```{r}
+kable(
+  dbGetQuery(sib_plot,
+             "SELECT type_ev, desc_type_ev,activity, desc_activity
+             FROM main.dic_activity da
+             LEFT JOIN main.dic_type_ev dte ON da.cd_type_ev=dte.id_type_ev
+             ORDER BY id_type_ev,id_act
+             "),
+  booktab = T,
+  caption="\\label{tab:events}Description of the types of events to be entered in the event table"
+) %>%
+  column_spec(column = c(2,4),width = "5cm") %>%
+  collapse_rows(1:2, latex_hline= "full", valign = "top")
+```
+
+Table \ref{tab:tab_events} present the different types of events that might be entered in the event table (we might put more types during the process as they appear).
+The idea is to have a central table of the database that may helping follow the temporal dimension of the activities.
+
+I still have a doubt whether we should mix the field/lab work with the activities of data input in the database.
+Indeed, the system will rely heavily on the activities annoted in the data_input activities.
+In particular, the idea here is that the database may be in a "keep-all" input mode, in which modifications may be added to the existing data without deleting the data which was entered (supposedly wrongly) before.
+Therefore, data will be able to store "conflict" (for example differences in species identification through time).
+The database, in all data export, will be able to send the last version, but we may access if needed the history of data-conflicts.
+All this system will work by watching the `
+
+## Group of plots, plots and sampling-units: the field sampling description
+
+In order to account correctly for the sampling system of the potential data integrated in the information system, we considered 3 levels of sampling schemes.
+
+1. the central level is the plot (here a "plot" can be a relevé, a permanent plot or a temporary one-shot plot)
+2. in order to allow sublevels to the plots, ("subplots", observations around the plots etc.), we created a "sampling-unit" table in the data model. In cases where there are no subplot to be considered, the model will be able to treat sampling units which are equivalent to plots. Note that the presences of species will be linked to the sampling unit, not directly to the plots.
+3. plot groups. Every plot will be included in a plot group, which may include only one plot. The plot groups have 2 main characteristics:
+   + data input activities are defined at a "plot-group" scale, which means that authorizations will be defined at this level, it is impossible to authorize access to only a part of the plot group and not the others
+   + species denomination are valid for all the plot group, which means that if the "code" of the species change for one of the plots, it changes for all plots in the group (it is still possible to attribute a new code/denomination to the individual of a plot though)
+   
+This sampling strategy scheme might not be complex enough to describe some complex sampling strategies, however the user may define as they please the names of their plots and sampling units (with the only limit that a plot name need to be unique in all the database, and the name of the sampling units unique in a plot), therefore, the names might allow the users to store informations about their sampling strategy. Moreover, the tables include some "comment" fields that may help as well.
+
+This sampling description might be too complex for some cases as well (only one plot, without any subplot and plot groups needed). In that case, the raw data may be too complex and use some useless tables, but the exportation tools will allow the users to overlook completely the complexity of the data storage if they need!
+
+The tables which includes the plots data will be public by default in the system, which means that all the data in them will be available to everyone having the basic authorization to access the database.
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","plot")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPlot} Column specifications of the table main.plot")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPlot}Extra-constraints for the table main.plot")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","gp_plot")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPlotGp} Column specifications of the table main.gp\\_plot")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","gp_plot")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPlotGp}Extra-constraints for the table main.gp\\_plot")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","sampling_unit")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainSamplingUnit} Column specifications of the table main.sampling\\_unit")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","sampling_unit")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainSamplingUnit}Extra-constraints for the table main.sampling\\_unit")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+
+
+## Localization, spatial tables
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_spat_pt")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPlotSpatPt} Column specifications of the table main.plot\\_spat\\_pt")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_spat_pt")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPlotSpatPt}Extra-constraints for the table main.plot\\_spat\\_pt")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_spat_polyg")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPlotSpatPolyg} Column specifications of the table main.plot\\_spat\\_polyg")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_spat_polyg")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPlotSpatPolyg}Extra-constraints for the table main.plot\\_spat\\_polyg")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+
+## Plot metadata
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_metadata_verbatim")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPlotMetadataVerbatim} Column specifications of the table main.plot\\_metadata\\_verbatim")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_metadata_verbatim")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPlotMetadataVerbatim}Extra-constraints for the table main.plot\\_metadata\\_verbatim")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+
+## People and participation
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","pers")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPers} Column specifications of the table main.pers")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","pers")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPers}Extra-constraints for the table main.pers")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","partic")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPartic} Column specifications of the table main.partic")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","partic")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPartic}Extra-constraints for the table main.partic")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+## Taxonomy
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","taxonomy")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainTaxonomy} Column specifications of the table main.taxonomy")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","taxonomy")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainTaxonomy}Extra-constraints for the table main.taxonomy")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","tax_ident")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainTaxIdent} Column specifications of the table main.tax\\_ident")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","tax_ident")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainTaxIdent}Extra-constraints for the table main.tax\\_ident")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+
+
+# Permanent plot
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","ind_census")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainIndCensus} Column specifications of the table main.ind\\_census")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","ind_census")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainIndCensus}Extra-constraints for the table main.ind\\_census")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","tag_census")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainTagCensus} Column specifications of the table main.tag\\_census")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","tag_census")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainTagCensus}Extra-constraints for the table main.tag\\_census")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","tag_status")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainTagStatus} Column specifications of the table main.tag\\_status")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","tag_status")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainTagStatus}Extra-constraints for the table main.tag\\_status")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","tag_mortality")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainTagMortality} Column specifications of the table main.tag\\_mortality")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","tag_mortality")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainTagMortality}Extra-constraints for the table main.tag\\_mortality")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","tag_measurement")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainTagMeasurement} Column specifications of the table main.tag\\_measurement")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","tag_measurement")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainTagMeasurement}Extra-constraints for the table main.tag\\_measurement")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","xy_tag")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainXyTag} Column specifications of the table main.xy\\_tag")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","xy_tag")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainXyTag}Extra-constraints for the table main.xy\\_tag")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+# Composition (no individual data)
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","compo")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainCompo} Column specifications of the table main.compo")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","compo")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainCompo}Extra-constraints for the table main.compo")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+
+# Phytosociology and syntaxonomy
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","syntaxonomy")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainSyntaxonomy} Column specifications of the table main.syntaxonomy")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","syntaxonomy")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainSyntaxonomy}Extra-constraints for the table main.syntaxonomy")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_syn")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPlotSyn} Column specifications of the table main.plot\\_syn")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_syn")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainPlotSyn}Extra-constraints for the table main.plot\\_syn")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","sp_carac_syn")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainSpCaracSyn} Column specifications of the table main.sp\\_carac\\_syn")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","sp_carac_syn")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainSpCaracSyn}Extra-constraints for the table main.sp\\_carac\\_syn")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+
+
+
+
+
+
+
