@@ -25,46 +25,13 @@ CREATE TABLE main.dic_activity(
 CREATE TABLE main.event
 (
   id_ev serial PRIMARY KEY,
-  fecha date NOT NULL,
-  time timestamp,
-  cd_type_ev integer REFERENCES main.dic_type_ev(id_type_ev) NOT NULL,
-  cd_act integer REFERENCES main.dic_activity(id_act),
+  date_ev date NOT NULL,
+  time_ev timestamp,
+  cd_act integer REFERENCES main.dic_activity(id_act) NOT NULL,
   cd_input integer REFERENCES main.event(id_ev),
   comments text,
-  UNIQUE (fecha,time,cd_type_ev)
+  UNIQUE (date_ev,time_ev,cd_act,cd_input)
 );
-
-
-/* TODO: For the persons it will be useful to manage different ways to integrate names, such as initials and all
-I put an "initial" field for the cases where the first/middle names are not given, but we need to refine the CHECK options instead of a simple unique on all the table
-*/
-CREATE TABLE main.pers
-(
-  id_pers serial PRIMARY KEY,
-  first_name varchar(50),
-  middle_name varchar(50),
-  last_name varchar(50) NOT NULL,
-  last_name_2 varchar(50),
-  initial varchar(6),
-  cd_entry integer REFERENCES main.event(id_ev),
-  UNIQUE (first_name,middle_name,last_name,last_name_2,initial)
-);
-
-CREATE TABLE main.partic
-(
-  id serial PRIMARY KEY,
-  cd_pers integer REFERENCES main.pers(id_pers),
-  cd_ev integer REFERENCES main.event(id_ev),
-  role text,
-  order_role integer,
-  institution text,
-  sponsor text,
-  comment text,
-  email text,
-  UNIQUE (cd_pers,cd_ev,role)
-  --- note: not sure whether to put institutions, sponsors here or in a separate table
-);
-
 
 CREATE TABLE main.dic_type_gp
 (
@@ -78,42 +45,67 @@ CREATE TABLE main.dic_abund
   type_abund text
 );
 
+CREATE TABLE main.input
+(
+  cd_ev integer PRIMARY KEY REFERENCES main.event(id_ev),
+  cd_intype integer REFERENCES main.dic_type_gp(id_type_gp) NOT NULL,
+  cd_abund integer REFERENCES main.dic_abund(id_abund) NOT NULL,
+  compo_table text UNIQUE,
+  comment text 
+);
+
+/* TODO: For the persons it will be useful to manage different ways to integrate names, such as initials and all
+I put an "initial" field for the cases where the first/middle names are not given, but we need to refine the CHECK options instead of a simple unique on all the table
+*/
+CREATE TABLE main.pers
+(
+  id_pers serial PRIMARY KEY,
+  first_name varchar(50),
+  middle_name varchar(50),
+  last_name varchar(50) NOT NULL,
+  last_name_2 varchar(50),
+  initial varchar(6),
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE (first_name,middle_name,last_name,last_name_2,initial)
+);
+
+CREATE TABLE main.partic
+(
+  id_part serial PRIMARY KEY,
+  cd_pers integer REFERENCES main.pers(id_pers) NOT NULL,
+  cd_ev integer REFERENCES main.event(id_ev) NOT NULL,
+  role_part text,
+  order_role integer,
+  institution text,
+  sponsor text,
+  comment text,
+  email text,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE (cd_pers,cd_ev,role_part)
+  --- note: not sure whether to put institutions, sponsors here or in a separate table
+);
+
+
 /* The following table, even though it has been first thought as a group of table sharing taxonomic denomination might as well represent a group of plots which cannot be separated...
 the consequences here are that the authorizations might as well not be separated between the plots, if it is accepted as that by the sib_users it might simplify greatly the process of rights
 and permissions on the data
 
-It will also define the type of abundance that might be stored for the group of plots. That also mean that there will be a correspondance in a group of plot:
+It will also define the type of abundance that might be stored for the group of plots. That also mean that there will be a correspondance in a group of plot: (<-- No it wont)
 * for the authorization and habilitations of reading/writing etc
 * for the denomination: if a denomination changes in a group, it changes for all the plots of the group
 * for the type of abundance if this is a "composition-type" group of plots
 */
-CREATE TABLE main.gp_plot -- note: in a group of plots the denomination of species is the same between the plots, it allows to take into account the fact that the species had only one name in a table of composition
-(
-  id_gp serial PRIMARY KEY,
-  name_gp text,
-  type_gp int REFERENCES main.dic_type_gp(id_type_gp),
-  cd_abund int REFERENCES main.dic_abund(id_abund),
-  comments text,
-  cd_input integer REFERENCES main.event(id_ev)
-);
 
 CREATE TABLE main.plot
 (
   id_plot serial PRIMARY KEY,
   plot_name varchar(50) UNIQUE NOT NULL,
-  cd_gp int REFERENCES main.gp_plot(id_gp),
-  cd_input integer REFERENCES main.event(id_ev)
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
 
-CREATE TABLE main.plot_spat_pt
+CREATE TABLE main.plot_spatial
 (
-  id integer PRIMARY KEY REFERENCES main.plot(id_plot)
-);
-
-
-CREATE TABLE main.plot_spat_polyg
-(
-  id integer PRIMARY KEY REFERENCES main.plot(id_plot)
+  gid integer PRIMARY KEY REFERENCES main.plot(id_plot)
 );
 
 
@@ -131,10 +123,10 @@ CREATE TABLE main.plot_meta_verbatim
   width_m integer,
   subplot_area_ha double precision,
   region varchar(50),
-  ecosystem varchar(50),
-  location_name text,
-  location_tyoe varchar(15),
-  state varchar(15),
+  ecosystem varchar(50), -- that should include the franja/habitat/gran ambiente/region_vida from O. Rangel's data (we might need to make it various fields)
+  location_name text, -- let's check in the data whether this may correspond to the veredas
+  location_type varchar(15),
+  state varchar(15), -- difference between state, country, province
   country varchar(30),
   province varchar(30),
   terrain_type varchar(50),
@@ -146,7 +138,8 @@ CREATE TABLE main.plot_meta_verbatim
   nearest_anthropogenic_edge integer,
   fragment_size_ha integer,
   comments text,
-  cd_input integer REFERENCES main.event(id_ev)
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE(latitude_decimal,longitude_decimal)
 );
 
 
@@ -157,64 +150,17 @@ CREATE TABLE main.sampling_unit
   cd_plot int REFERENCES main.plot(id_plot) NOT NULL,
   name_su serial NOT NULL,
   type_hier_su varchar(50),
-  cd_input integer REFERENCES main.event(id_ev) NOT NULL
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE (cd_plot, name_su)
 );
 
-CREATE TABLE main.ind_census
+CREATE TABLE main.fieldwork
 (
-  id_ind serial PRIMARY KEY,
-  cd_su integer REFERENCES main.sampling_unit(id_su),
-  code varchar(8),
-  cd_input integer REFERENCES main.event(id_ev) NOT NULL,
-  cd_event integer REFERENCES main.event(id_ev) NOT NULL
-);
-
-CREATE TABLE main.tag_census
-(
-  id_tag serial PRIMARY KEY,
-  cd_ind integer REFERENCES main.ind_census(id_ind) NOT NULL,
+  id_fw serial PRIMARY KEY,
   cd_su integer REFERENCES main.sampling_unit(id_su) NOT NULL,
-  tag varchar(10),
-  subplot integer,
-  ramet integer,
-  cd_input integer REFERENCES main.event(id_ev) NOT NULL,
-  cd_event integer REFERENCES main.event(id_ev) NOT NULL,
-  UNIQUE(tag,cd_su,cd_input)
-);
-
-CREATE TABLE main.tag_measurement
-(
-  id_measure serial PRIMARY KEY,
-  cd_tag integer REFERENCES main.tag_census(id_tag) NOT NULL,
-  dbh_cm double precision,
-  pom_cm double precision,
-  height_cm double precision,
-  comments text,
-  cd_input integer REFERENCES main.event(id_ev),
-  cd_event integer REFERENCES main.event(id_ev)
-);
-
-CREATE TABLE main.tag_status
-(
-  id_status serial PRIMARY KEY,
-  cd_tag integer REFERENCES main.tag_census(id_tag),
-  alive_status varchar(10), --- check whether categorizable
-  comments text,
-  cd_input integer REFERENCES main.event(id_ev),
-  cd_event integer REFERENCES main.event(id_ev),
-  UNIQUE(cd_event,cd_tag)
-);
-
-CREATE TABLE main.tag_mortality
-(
-  id_mort serial PRIMARY KEY,
-  cd_status integer REFERENCES main.tag_status(id_status) NOT NULL UNIQUE,
-  mechanism varchar(30),
-  mortality_type varchar(30),
-  killer_process varchar(30),
-  comment text,
-  cd_input integer REFERENCES main.event(id_ev),
-  cd_event integer REFERENCES main.event(id_ev)
+  cd_ev integer REFERENCES main.event(id_ev),
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE(cd_su, cd_input)
 );
 
 
@@ -228,10 +174,10 @@ CREATE TABLE main.dic_tax_level
 CREATE TABLE main.taxonomy
 (
   id_tax serial PRIMARY KEY,
-  name varchar(100) NOT NULL,
+  name varchar(100) NOT NULL UNIQUE,
   cd_lev varchar(6) REFERENCES main.dic_tax_level(id_lev),
   cd_sup integer REFERENCES main.taxonomy(id_tax),
-  cd_input integer REFERENCES main.event(id_ev)
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
 
 /* TODO: In the denominations, we should have only one denomination by plot or tables, 
@@ -243,9 +189,8 @@ However, both processes are very similar, so putting them both in the same table
 CREATE TABLE main.tax_ident
 (
   id_ident serial PRIMARY KEY,
-  cd_ind integer REFERENCES main.ind_census(id_ind),
+  --cd_ind integer REFERENCES main.ind_census(id_ind),
   denom text NOT NULL,
-  cd_gp_plot int REFERENCES main.gp_plot(id_gp), --note: in cases where there are no "composition tables" including various "plots" it could reference directly a plot, not a group of plots
   voucher varchar(11),
   catalog_number varchar(15),
   cd_tax integer REFERENCES main.taxonomy(id_tax),
@@ -253,28 +198,102 @@ CREATE TABLE main.tax_ident
   cd_record integer REFERENCES main.event(id_ev),
   cd_identification integer REFERENCES main.event(id_ev),
   comment text,
-  cd_input integer REFERENCES main.event(id_ev),
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE(cd_input,denom)
+);
+
+CREATE TABLE main.ind_census
+(
+  id_ind serial PRIMARY KEY,
+  ind_name varchar(5) NOT NULL,
+  cd_fw integer REFERENCES main.fieldwork(id_fw) NOT NULL, -- maybe putting the fieldwork reference at the tag/ramet scale is sufficient and not needed here... need to think it over
+  cd_ident integer REFERENCES main.tax_ident(id_ident) NOT NULL,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE(cd_input,cd_fw,ind_name)
+);
+
+CREATE TABLE main.xy_ind
+(
+  id_xy serial PRIMARY KEY,
+  cd_ind integer REFERENCES main.ind_census(id_ind) NOT NULL,
+  x_m double precision NOT NULL,
+  y_m double precision NOT NULL,
+  comments text,
+  cd_fw integer REFERENCES main.fieldwork(id_fw) NOT NULL,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
   UNIQUE(cd_input,cd_ind)
 );
 
-CREATE TABLE main.xy_tag
+CREATE TABLE main.tag_census
 (
-  id_xy serial PRIMARY KEY,
-  cd_ind integer REFERENCES main.ind_census(id_ind),
-  x_m double precision,
-  y_m double precision,
-  comments text,
-  cd_input integer REFERENCES main.event(id_ev),
-  UNIQUE(cd_input,cd_ind)
+  id_tag serial PRIMARY KEY,
+  cd_ind integer REFERENCES main.ind_census(id_ind) NOT NULL,
+  cd_fw integer REFERENCES main.fieldwork(id_fw) NOT NULL, -- we need to keep that here and not only to reference the individual, because a ramet can appear in a particular fieldwork
+  tag varchar(10) NOT NULL,
+  ramet integer NOT NULL,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE(tag,cd_fw,cd_input),-- ensure that tags are unique for a particular fieldwork event (in a cd_input to allow for keeping modifications)
+  UNIQUE(cd_ind,ramet,cd_input) -- ensure that ramet numbers are unique for an individual (in a cd_input to allow for keeping modifications)
 );
+
+CREATE TABLE main.tag_measurement
+(
+  id_measure serial PRIMARY KEY,
+  cd_tag integer REFERENCES main.tag_census(id_tag) NOT NULL,
+  cd_fw integer REFERENCES main.fieldwork(id_fw) NOT NULL,
+  dbh_cm double precision,
+  pom_cm double precision,
+  height_cm double precision,
+  alive_status varchar(10) NOT NULL, -- check whether categorizable
+  comments text,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE(cd_tag,cd_fw,cd_input)
+);
+
+/*
+Should we merge these 2 tables (or should we consider alive all what is not dead better?)
+
+
+CREATE TABLE main.tag_status
+(
+  id_status serial PRIMARY KEY,
+  cd_tag integer REFERENCES main.tag_census(id_tag) NOT NULL,
+  cd_fw integer REFERENCES main.fieldwork(id_fw) NOT NULL,
+  alive_status varchar(10), --- check whether categorizable
+  comments text,
+  cd_input integer REFERENCES main.input(cd_ev),
+  UNIQUE(cd_fw,cd_tag)
+);
+
+*/
+
+CREATE TABLE main.tag_mortality
+(
+  id_mort serial PRIMARY KEY,
+  cd_tag integer REFERENCES main.tag_census(id_tag) NOT NULL,
+  --cd_status integer REFERENCES main.tag_status(id_status) NOT NULL UNIQUE,
+  cd_fw integer REFERENCES main.fieldwork(id_fw) NOT NULL,
+  mechanism varchar(30),
+  mortality_type varchar(30),
+  killer_process varchar(30),
+  comment text,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
+  UNIQUE(cd_tag,cd_input)
+);
+
+
+
+
+
+
 
 CREATE TABLE main.compo
 (
   id_com serial PRIMARY KEY,
-  cd_su int REFERENCES main.sampling_unit(id_su),
-  cd_ident int REFERENCES main.tax_ident(id_ident),
+  cd_fw int REFERENCES main.fieldwork(id_fw) NOT NULL,
+  cd_ident int REFERENCES main.tax_ident(id_ident) NOT NULL,
   abund double precision,
-  cd_input integer REFERENCES main.event(id_ev)
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
 
 CREATE TABLE main.dic_syntax_level
@@ -282,7 +301,7 @@ CREATE TABLE main.dic_syntax_level
   id_synlev varchar(6) PRIMARY KEY,
   order_int int NOT NULL UNIQUE,
   syntax_level varchar(20) NOT NULL UNIQUE,
-  cd_input integer REFERENCES main.event(id_ev)
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
 
 CREATE TABLE main.syntaxonomy
@@ -291,22 +310,21 @@ CREATE TABLE main.syntaxonomy
   name text NOT NULL,
   cd_synlev varchar(6) REFERENCES main.dic_syntax_level(id_synlev),
   cd_sup integer REFERENCES main.syntaxonomy(id_syn),
-  cd_input integer REFERENCES main.event(id_ev)
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
 
 CREATE TABLE main.sp_carac_syn
 (
   id_spcarac serial PRIMARY KEY,
-  cd_gp int REFERENCES main.gp_plot(id_gp),
-  cd_ident int REFERENCES main.tax_ident(id_ident),
-  cd_syn int REFERENCES main.syntaxonomy(id_syn),
-  cd_input integer REFERENCES main.event(id_ev)
+  cd_ident int REFERENCES main.tax_ident(id_ident) NOT NULL,
+  cd_syn int REFERENCES main.syntaxonomy(id_syn) NOT NULL,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
 
-CREATE TABLE main.plot_syn
+CREATE TABLE main.su_syn
 (
-  id_plsyn serial PRIMARY KEY,
-  cd_plot int REFERENCES main.plot(id_plot),
-  cd_syn int REFERENCES main.syntaxonomy(id_syn),
-  cd_input integer REFERENCES main.event(id_ev)
+  id_su_syn serial PRIMARY KEY,
+  cd_su int REFERENCES main.sampling_unit(id_su) NOT NULL,
+  cd_syn int REFERENCES main.syntaxonomy(id_syn) NOT NULL,
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );

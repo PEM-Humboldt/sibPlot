@@ -91,9 +91,6 @@ query <- "WITH
   NOT (constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY')) AND
   NOT (constraint_type = 'UNIQUE')
   "
-#require(RPostgreSQL)
-#con<-dbConnect(PostgreSQL(),user="sib_user",dbname="sib_plot")
-#res <- dbSendQuery(con, query, params = list("main","event"))
 res <- dbSendQuery(con, query, params = list(schema,table))
 r <- dbFetch(res)
 dbClearResult(res)

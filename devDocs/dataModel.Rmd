@@ -1,5 +1,5 @@
 ---
-title: "Description of the data model in the sib plot information system"
+title: "Description of the data model in the SiB-Plot information system"
 author: "Marius Bottin"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
 output: 
@@ -22,21 +22,26 @@ header-includes:
   - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
 --- 
 
-```{r, setup}
+
+***************
+
+
+```{r, setup, message=F, warning=F, include=F}
 require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
 def.chunk.hook  <- knitr::knit_hooks$get("chunk")
 knitr::knit_hooks$set(chunk = function(x, options) {
   x <- def.chunk.hook(x, options)
   ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
 })
-opts_chunk$set(cache=F,fig.path="../../Fig/data_model",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
+opts_chunk$set(cache=F,fig.path="../../Fig/data_model",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize',
+               echo=F, message=F, warning=F)
 options(knitr.kable.NA = '---')
 ```
 
 **Connection as database admin (to the postgres database)**
 
 ```{r}
-sib_adm<- dbConnect(PostgreSQL(),dbname="sib_plot",user="sib_adm",password="sib")
+sib_adm <- dbConnect(PostgreSQL(),dbname="sib_plot",user="sib_adm",password="sib")
 ```
 
 Deleting the main schema for having a cleanstate:
@@ -61,10 +66,10 @@ psql  -f ../notR/sql_database/insertDictionaries.sql -U sib_user -d sib_plot # -
 source("../functions/export_svg.R")
 require(dm)
 (dm_object<-dm_from_src(sib_plot,schema="main"))
-all_types<- c("event","plot", "gp_plot", "dic_tax_level", "taxonomy", "tax_ident", "dic_type_ev","dic_activity","pers","partic","dic_type_gp","dic_abund","plot_meta_verbatim","plot_spat_polyg","plot_spat_pt","sampling_unit")
-only_pp<- c("tag_mortality","xy_tag","ind_census","tag_census","tag_measurement","tag_status")
+all_types<- c("event","plot", "dic_tax_level", "taxonomy", "tax_ident", "dic_type_ev","dic_activity","pers","partic","dic_type_gp","dic_abund","plot_meta_verbatim","plot_spatial","sampling_unit","fieldwork","input")
+only_pp<- c("tag_mortality","xy_ind","ind_census","tag_census","tag_measurement")
 only_phyto<- c("compo")
-only_syntax<- c("syntaxonomy","dic_syntax_level","sp_carac_syn","plot_syn")
+only_syntax<- c("syntaxonomy","dic_syntax_level","sp_carac_syn","su_syn")
 dm_object<- dm_set_colors(dm_object,
                           red=all_of(all_types),
                           green=all_of(only_pp),
@@ -99,28 +104,10 @@ The "shared tables" are the basic tables of the model (red in fig \ref{fig:data_
 ## The *event* system
 
 The event table is the central table of the system: it contains all the events that contributed to the data in the database (field events, lab events and data events).
-
-The specifications of the table is:
-
-```{r}
-specsCol <- dbGetColumnSpecs(sib_plot,"main","event")
-kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainEvent} Column specifications of the table main.event")%>%
-  kable_styling(font_size = 8)
-other_constraint <- dbOtherTableConstraints(sib_plot,"main","event")
-if(nrow(other_constraint)>0)
-{
-  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
-        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
-        caption = "\\label{tab:othConstMainEvent}Extra-constraints for the table main.event")%>%
-    kable_styling(font_size = 8)
-}
-```
-
-
-
-
-
+It is accompanied by a table input, which shares its primary key.
+Actually, the primary key of the input is a foreign key pointing to the primary key of the event table).
+That is because data input in the database is considered one of the potential events which participate to the dataset construction.
+It allow us to define some particular columns which are specific to the inputs, without losing the possibility to consider data input as one activity.
 
 ```{r}
 kable(
@@ -137,15 +124,82 @@ kable(
   collapse_rows(1:2, latex_hline= "full", valign = "top")
 ```
 
-Table \ref{tab:tab_events} present the different types of events that might be entered in the event table (we might put more types during the process as they appear).
-The idea is to have a central table of the database that may helping follow the temporal dimension of the activities.
 
-I still have a doubt whether we should mix the field/lab work with the activities of data input in the database.
-Indeed, the system will rely heavily on the activities annoted in the data_input activities.
+The specifications of the event table is found and represented with the following code, that we will repeat and adapt for all the tables in the documents:
+
+```{r, echo=T}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","event")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainEvent} Column specifications of the table main.event",label=NA)%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","event")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainEvent}Extra-constraints for the table main.event",label=NA)%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","input")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainInput} Column specifications of the table main.input",label=NA)%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","input")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainInput}Extra-constraints for the table main.input",label=NA)%>%
+    kable_styling(font_size = 8)
+}
+```
+
+
+
+<!--
+**Note: I think we may delete the plot group table, since denomination and plot group will be considered by checking the input code in taxonomy tables and plot tables...**... That might simplify the process... but it means that we need to replace it by a table which references the input event and gives the type of abundance
+-->
+
+
+Table \ref{tab:events} introduces the different types of events that might be entered in the event table (we might put more types during the process as they appear).
+The idea is to have a central table of the database that may helping follow the temporal dimension of the activities, and make a proper census of all the activities leading to the database.
+
+Note in table \ref{tab:colSpecMainEvent}, table \ref{tab:othConstMainEvent} and table \ref{tab:colSpecMainInput} that:
+
+* the column *id_ev* is a serial, as will be most of the primary keys of the database: it means that these are integers that will be managed directly by the database, when we will insert new data, the database will append a new number here
+* the column *date* is mandatory: it means that a date need to be entered here for inserting any event in the table, however, the other table may accept null values in the fields which reference the field activity if no date is provided...
+  + it will be highly recommended to put there field and lab operations but it is not mandatory if not possible
+* the column *cd_input* is a reference to the same table: as in all the tables, we will have to reference the data input corresponding to every row. This allows to have a good reference system, for being able to apply modifications, apply authorizations on a row level and follow the evolution of the data though time
+* All the activity types are described in the tables main.dic_activity and main.dic_type_ev (which separates activities concerning data, field and laboratory). This means that the activity types needs to be inserted prior to the activities
+* Time is not mandatory
+* the database will accept, in one batch entered (cd_input="group of plots" see next paragraph), only one activity of a type by date/time... It might be problematic sometimes (since the time is not mandatory), but it allows to separate the activities well on a database level.
+
+The system will rely heavily on the activities noted in the data_input table.
 In particular, the idea here is that the database may be in a "keep-all" input mode, in which modifications may be added to the existing data without deleting the data which was entered (supposedly wrongly) before.
 Therefore, data will be able to store "conflict" (for example differences in species identification through time).
 The database, in all data export, will be able to send the last version, but we may access if needed the history of data-conflicts.
-All this system will work by watching the `
+This system will work by watching the data input id associated with the lines of almost all tables, and to sort the conflicting data to give priority of the last entered data 
+
+
+
+
+
+*******
+
+**Collective decision to make and questions on the data**
+
+1. To decide on mixing lab/field work with data input (it makes it all simple in terms on following operations through time but might lower the information system efficiency)
+1. To decide on the possibility of the "keep-all" mode of the database
+1. Should the field activities be defined at a plot level or a sampling unit level (= Is it possible that people go on different dates in the different sampling unit of the same plot?)
+
+******
+
+
 
 ## Group of plots, plots and sampling-units: the field sampling description
 
@@ -153,7 +207,7 @@ In order to account correctly for the sampling system of the potential data inte
 
 1. the central level is the plot (here a "plot" can be a relevé, a permanent plot or a temporary one-shot plot)
 2. in order to allow sublevels to the plots, ("subplots", observations around the plots etc.), we created a "sampling-unit" table in the data model. In cases where there are no subplot to be considered, the model will be able to treat sampling units which are equivalent to plots. Note that the presences of species will be linked to the sampling unit, not directly to the plots.
-3. plot groups. Every plot will be included in a plot group, which may include only one plot. The plot groups have 2 main characteristics:
+3. plot groups. The plot group is actually not defined in the database, it only corresponds as a group of plot which shares a same (or various, in particular case of input events concerning data modification) input event. Every plot will be included in a plot group, which may include only one plot. The plot groups have 2 main characteristics:
    + data input activities are defined at a "plot-group" scale, which means that authorizations will be defined at this level, it is impossible to authorize access to only a part of the plot group and not the others
    + species denomination are valid for all the plot group, which means that if the "code" of the species change for one of the plots, it changes for all plots in the group (it is still possible to attribute a new code/denomination to the individual of a plot though)
    
@@ -163,16 +217,27 @@ This sampling description might be too complex for some cases as well (only one 
 
 The tables which includes the plots data will be public by default in the system, which means that all the data in them will be available to everyone having the basic authorization to access the database.
 
+Now comes the complicated problem of the relationships between dates/field activities and sampling strategies.
+The dificulties are:
+
+* the data should make possible to conceptually link all data to the field activities, which means that we need to find paths through the database, from many tables to the activity in the event table, passing by the sampling unit (the important information to be referenced is date+sampling unit)
+* as said before a field activity can include more than one plot/sampling units
+* many field activities may concern a single sampling unit (in the case of the permanent plots in particular)
+* all activities must be unique in the event table
+* all sampling units must be unique as well in the tables
+
+Due to all these reasons, it appear to me that the only way to correctly represent this situation in the data is to create as well a table which references the sampling unit table and the activity table (the table: *fieldwork*)
+
 
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","plot")
-kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+kable(label = NA, specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
       caption = "\\label{tab:colSpecMainPlot} Column specifications of the table main.plot")%>%
   kable_styling(font_size = 8)
 other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot")
 if(nrow(other_constraint)>0)
 {
-  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+  kable(label = NA, other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
         col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
         caption = "\\label{tab:othConstMainPlot}Extra-constraints for the table main.plot")%>%
     kable_styling(font_size = 8)
@@ -180,33 +245,15 @@ if(nrow(other_constraint)>0)
 ```
 
 
-
-```{r}
-specsCol <- dbGetColumnSpecs(sib_plot,"main","gp_plot")
-kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainPlotGp} Column specifications of the table main.gp\\_plot")%>%
-  kable_styling(font_size = 8)
-other_constraint <- dbOtherTableConstraints(sib_plot,"main","gp_plot")
-if(nrow(other_constraint)>0)
-{
-  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
-        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
-        caption = "\\label{tab:othConstMainPlotGp}Extra-constraints for the table main.gp\\_plot")%>%
-    kable_styling(font_size = 8)
-}
-```
-
-
-
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","sampling_unit")
-kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+kable(label = NA, specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
       caption = "\\label{tab:colSpecMainSamplingUnit} Column specifications of the table main.sampling\\_unit")%>%
   kable_styling(font_size = 8)
 other_constraint <- dbOtherTableConstraints(sib_plot,"main","sampling_unit")
 if(nrow(other_constraint)>0)
 {
-  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+  kable(label = NA, other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
         col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
         caption = "\\label{tab:othConstMainSamplingUnit}Extra-constraints for the table main.sampling\\_unit")%>%
     kable_styling(font_size = 8)
@@ -214,69 +261,126 @@ if(nrow(other_constraint)>0)
 ```
 
 
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","fieldwork")
+kable(label = NA, specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainFieldWork} Column specifications of the table main.fieldwork")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","fieldwork")
+if(nrow(other_constraint)>0)
+{
+  kable(label = NA,other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainFieldWork}Extra-constraints for the table main.fieldwork")%>%
+    kable_styling(font_size = 8)
+}
+```
+
+Comments on the tables and their specifications (tables [...]):
+
+1. plot names must be unique in all the database (see table \ref{tab:colSpecMainPlot}) 
+1. sampling unit names need to be unique in a plot (see table \ref{tab:othConstMainSamplingUnit})
+1. there is a possibility to enter a fieldwork without actually make a reference to a field event (see table \ref{tab:colSpecMainFieldWork}) (which may not be defined for all types of data), in this case it becomes only a step to determine the sampling unit
+1. in one input batch there should not be more than one fieldwork concerning a particular sampling unit (see table \ref{tab:othConstMainFieldWork})
 
 
+*********
+
+**Collective decisions to make and questions on the data**
+
+1. Should we consider the possibility of spatial data at the scale of the sampling unit?
+1. How should the new sampling unit/activity link table should be connected with the participation table (should we separate the people going to a sampling unit and not another or should the participation be considered at the level of the whole activity/event)
+
+**********
+
+
+
+\clearpage
 
 ## Localization, spatial tables
 
+If the spatial extensions are habilitated in the database, the coordinates of the plots are translated into a spatial point geometry.
+There is also the possibility of integrating a spatial polygon representing of the plot.
+All the geometries of the database will have the same coordinate system, defined during the initialization of the database (a future document should describe this process)
+
+All these informations are included in the plot_spatial table, which have for Primary key which is also a foreign key pointing to the primary key of the plot table.
+That way we ensure that coordinates concerns existing plots, and we do not overweight the plot table.
+To insert data in the plot_spatial table, one need to give either the point geometry or the polygon geometry, if none is available, no row is added to the  table.
 
 ```{r}
-specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_spat_pt")
-kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainPlotSpatPt} Column specifications of the table main.plot\\_spat\\_pt")%>%
+specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_spatial")
+kable(label = NA, specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainPlotSpatPt} Column specifications of the table main.plot\\_spatial")%>%
   kable_styling(font_size = 8)
-other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_spat_pt")
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_spatial")
 if(nrow(other_constraint)>0)
 {
-  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+  kable(label = NA,other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
         col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
-        caption = "\\label{tab:othConstMainPlotSpatPt}Extra-constraints for the table main.plot\\_spat\\_pt")%>%
+        caption = "\\label{tab:othConstMainPlotSpatial}Extra-constraints for the table main.plot\\_spatial")%>%
     kable_styling(font_size = 8)
 }
 ```
 
 
-
-```{r}
-specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_spat_polyg")
-kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainPlotSpatPolyg} Column specifications of the table main.plot\\_spat\\_polyg")%>%
-  kable_styling(font_size = 8)
-other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_spat_polyg")
-if(nrow(other_constraint)>0)
-{
-  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
-        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
-        caption = "\\label{tab:othConstMainPlotSpatPolyg}Extra-constraints for the table main.plot\\_spat\\_polyg")%>%
-    kable_styling(font_size = 8)
-}
-```
-
-
-
+\clearpage
 
 ## Plot metadata
 
+Here again, the table plot_meta_verbatim has for primary key a foreign key pointing to the plot table, which simplificate the future join operation.
+Note that the cd_input of the plot data will be the input process which defined the plot, but we might later have modifications of the plot metadata (it is unrecomended though). 
+In that case the cd_plot will be different, but the cd_input will be the same.
+Therefore, the cd_plot should only be unique in association with a particular cd_input.
+
+The table is called plot_meta_verbatim, because future work should allow to categorize most of the field of the tables.
+The categorized field should then be stored in a metadata table that would include the foreign keys pointing to the definition tables for each field.
+With the same idea, we will keep here the verbatim of the localization field, but the real localization fields should be obtained by the coordinates of the plot and external maps, in order to have an official reference to what we mean by countries, department, localities (veredas) etc.
+An option would then to check the compatibility between the verbatim and the spatial information obtained through maps.
+
 
 ```{r}
-specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_metadata_verbatim")
+specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_meta_verbatim")
 kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainPlotMetadataVerbatim} Column specifications of the table main.plot\\_metadata\\_verbatim")%>%
+      caption = "\\label{tab:colSpecMainPlotMetadataVerbatim} Column specifications of the table main.plot\\_meta\\_verbatim")%>%
   kable_styling(font_size = 8)
 other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_metadata_verbatim")
 if(nrow(other_constraint)>0)
 {
   kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
         col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
-        caption = "\\label{tab:othConstMainPlotMetadataVerbatim}Extra-constraints for the table main.plot\\_metadata\\_verbatim")%>%
+        caption = "\\label{tab:othConstMainPlotMetadataVerbatim}Extra-constraints for the table main.plot\\_meta\\_verbatim")%>%
     kable_styling(font_size = 8)
 }
 ```
 
 
-
+\clearpage
 
 ## People and participation
+
+I thought that people should be stored in a different table than their participation.
+That allows people to have various activities, with different institutions, emails etc.
+
+I believe that this information should be considered metadata, and made available, but some personal data rules may apply here...
+We could also made only available the last mail adresses of the people... without their names.
+All of these may be enforced by options during the database creation, in order to make people responsible of their choices in front of their legal obligations, depending on their institutions, countries etc.
+
+There will be all a process of recognizing people and merging the cases where people are denominated with initials, first names, first etc.
+That will be a complex process, but might result worth the effort at the end.
+
+The different operations that people might be a part of are:
+
+* fieldwork (we'll need to check whether it is referenced the smartest way possible in the database)
+* species determination (in the field or the lab)
+* other lab work
+* input operations
+
+Note that since the *cd_ev* is mandatory for entering a participation, no participation to an activity will be possible without knowing the date of the activity... (this might be something we want to make more flexible).
+
+People might be entered various time in an activity, if they participated with various roles.
+
+Right now, we will consider only one text for sponsor and institution, but it might be interesting later to complexify the data structure, in order to allow people to have various institutions or various sponsor, separated in the database, but referencing one only participation...
+That might already be done by separating roles though (I go to the field as a botanist sponsored by the Humboldt institute, and as a logistician sponsored by the European Union). All of these things should be decided collectively, I just made a first proposal here.`
 
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","pers")
@@ -311,7 +415,28 @@ if(nrow(other_constraint)>0)
 ```
 
 
-## Taxonomy
+\clearpage
+
+## Taxonomy and identification
+
+The main idea here is to separate taxonomy and identification.
+Identification is the process of attributing a taxon to an individual or a group of individuals, while taxonomy is the definition of the taxa and their relationships.
+
+When the 2 processes are separate, we may enforce a rational, strict but simple way of storing taxonomy.
+On the long term, we may leave more choices to the information system users but right now, the taxonomy will be stored in a relatively simple table:
+
+1. Each line of the table represent a taxon, associated with a level (may be from variety to class or even kingdom, even though we decided not to enter in these high ranks consideration in the sibPlot data for now)
+1. Each taxon references its parent taxon when possible (for example a species references the genus it is part of). It allows us to obtain any higher rank in the classification (when someone gave the data)
+
+On the longer term, we hope that the package will propose replacing this taxonomy table by a more comprehensive data system, comparable to the GBIF backbone, which may even allow the implementation of a local Taxonomic Resolution Name Service. 
+It would reference various open data reference taxonomic system and give priority to different databases depending of the user preference.
+
+
+On the other hand, the identification table allows to attribute an identifier role to a person at a much finer scale (a plot/date, or a plot group date).
+It also allows to define "denominations" (species codes, "*Espeletia sp.1*" etc.) which correspond to real taxa from the taxonomic database for a particular plot, or a group of plots (a group of plot which were entered with the same *cd\_input* in the database).
+Identifications can also reference catalogs, or voucher if they exists.
+
+
 
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","taxonomy")
@@ -347,9 +472,40 @@ if(nrow(other_constraint)>0)
 
 
 
+\clearpage
+
+# Permanent plots
+
+The tables concerning the permanent plot part of the system are represented in green in fig \ref{fig:data_mod_comp}.
 
 
-# Permanent plot
+## Organization levels of the permanent plots data
+
+Conceptually, in the plot network such as the BST (Bosques Secos Tropicales: tropical dry forest) network, there are 3 levels:
+
+1. plot (here managed in tables which are not specific to permanent plots)
+2. individuals
+3. ramet (tag)
+
+The ramets (tags) are measured regularly (diameter etc.), but the taxonomic information is valid at the individual level (all the ramets of an individual are from the same species, by definition!) 
+
+The individuals may have :
+
+* taxonomic information (managed through the general tables)
+* coordinates in meters in the plot
+
+The ramets may have:
+
+* tag identification 
+* measurements through time
+* alive/dead status through time (with causes of deaths etc.)
+
+As you can see here, while the information of the individuals is quite stable through time, the information on the tags is more dynamic (an individual is declared dead when all its ramets are dead, the information is not held at the individual level).
+
+\clearpage
+
+## Table specifications
+### Individuals
 
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","ind_census")
@@ -366,7 +522,30 @@ if(nrow(other_constraint)>0)
 }
 ```
 
+```{r}
+specsCol <- dbGetColumnSpecs(sib_plot,"main","xy_ind")
+kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
+      caption = "\\label{tab:colSpecMainXyInd} Column specifications of the table main.xy\\_ind")%>%
+  kable_styling(font_size = 8)
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","xy_ind")
+if(nrow(other_constraint)>0)
+{
+  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
+        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
+        caption = "\\label{tab:othConstMainXyInd}Extra-constraints for the table main.xy\\_ind")%>%
+    kable_styling(font_size = 8)
+}
+```
 
+The tables *main.ind\_census* and *main.xy\_ind* are the 2 tables concerning the individual level for permanent plots, their specifications are shown in tables \ref{tab:colSpecMainIndCensus} to \ref{tab:othConstMainXyInd}:
+
+* the individual name is mandatory and unique in a sampling unit (through the fieldwork reference)
+* the coordinates of the individual can be given only once by individual (further modifications may be given in another input process)
+
+
+\clearpage
+
+### Tags
 
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","tag_census")
@@ -388,7 +567,7 @@ if(nrow(other_constraint)>0)
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","tag_status")
 kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainTagStatus} Column specifications of the table main.tag\\_status")%>%
+      caption = "\\label{tab:colSpecMainTagStatus} Column specifications of the table main.tag\\_status (Deleted in the model for now, waiting for further decisions)")%>%
   kable_styling(font_size = 8)
 other_constraint <- dbOtherTableConstraints(sib_plot,"main","tag_status")
 if(nrow(other_constraint)>0)
@@ -434,21 +613,36 @@ if(nrow(other_constraint)>0)
 }
 ```
 
-```{r}
-specsCol <- dbGetColumnSpecs(sib_plot,"main","xy_tag")
-kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainXyTag} Column specifications of the table main.xy\\_tag")%>%
-  kable_styling(font_size = 8)
-other_constraint <- dbOtherTableConstraints(sib_plot,"main","xy_tag")
-if(nrow(other_constraint)>0)
-{
-  kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
-        col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
-        caption = "\\label{tab:othConstMainXyTag}Extra-constraints for the table main.xy\\_tag")%>%
-    kable_styling(font_size = 8)
-}
-```
+At the tag level, informations are included in tables *main.tag\_census*, *main.tag\_mortality* and *main.tag\_measurement* (*main.tag\_status* is deleted from the model for now, and the aliveStatus field is transferred to the table *main.tag\_measurement*).
+Their specifications are described in tables \ref{tab:colSpecMainTagCensus} to \ref{tab:othConstMainTagMeasurement}:
 
+* tags are unique for a particular fieldwork event (hence for a sampling unit)
+* ramets numbers are unique for an individual
+* all fields are mandatory in the tag census table
+* mortality can only be entered once by tag (potentially modified in a new input)
+* alive_status is mandatory in the *tag\_measurement table*
+* there can be only one measurement row by tag and input
+* all variable are text or double and none is categorized through a dictionary table for now.
+
+
+*********
+
+**Collective decisions to make and questions on the data**
+
+1. Should fieldwork be only referenced at the ramet level?
+1. Should aliveStatus be deleted and all ramets not dead considered alive? There are 3 ways here:
+   + keeping an alive status table
+   + putting a (potentially mandatory) aliveStatus column to the tag measurement tables
+   + Just keep the mortality table (considering that what is not declared dead is alive!)
+1. Should we categorize mortality variables and alive_status (through a definition table referenced by foreign key)
+
+
+**********
+
+
+
+
+\clearpage
 
 # Composition (no individual data)
 
@@ -467,8 +661,13 @@ if(nrow(other_constraint)>0)
 }
 ```
 
+Some vegetation data source are not based on individuals but present composition data at the community level.
+These data are entered in the database, thanks to a single table (see lightblue table in figure \ref{fig:data_mod_comp}), *main.compo* instead of the tables which described tags and individuals in the permanent plot module.
 
+The *compo* table basically works by referencing identifications and fieldwork (hence, a sampling unit), and associate them to a measure of abundance (or coverage, area basal etc.).
+Null abundance might be entered if there is no idea of its abundance, or whether the only information is the presence of the species in a sampling unit.
 
+\clearpage
 
 # Phytosociology and syntaxonomy
 
@@ -492,16 +691,16 @@ if(nrow(other_constraint)>0)
 
 
 ```{r}
-specsCol <- dbGetColumnSpecs(sib_plot,"main","plot_syn")
+specsCol <- dbGetColumnSpecs(sib_plot,"main","su_syn")
 kable(specsCol[,-which(colnames(specsCol)%in%c("schema","table"))],booktab=T,col.names = gsub("_" , " ", colnames(specsCol)[-which(colnames(specsCol)%in%c("schema","table"))]),
-      caption = "\\label{tab:colSpecMainPlotSyn} Column specifications of the table main.plot\\_syn")%>%
+      caption = "\\label{tab:colSpecMainSuSyn} Column specifications of the table main.su\\_syn")%>%
   kable_styling(font_size = 8)
-other_constraint <- dbOtherTableConstraints(sib_plot,"main","plot_syn")
+other_constraint <- dbOtherTableConstraints(sib_plot,"main","su_syn")
 if(nrow(other_constraint)>0)
 {
   kable(other_constraint[-which(colnames(other_constraint)%in%c("schema","table"))],booktab=T,
         col.names = gsub("_" , " ", colnames(other_constraint)[-which(colnames(other_constraint)%in%c("schema","table"))]),
-        caption = "\\label{tab:othConstMainPlotSyn}Extra-constraints for the table main.plot\\_syn")%>%
+        caption = "\\label{tab:othConstMainPlotSyn}Extra-constraints for the table main.su\\_syn")%>%
     kable_styling(font_size = 8)
 }
 ```
@@ -523,10 +722,31 @@ if(nrow(other_constraint)>0)
 }
 ```
 
+The phytosociological data associate usually the sampling unit of communities to "syntaxon" which are hierarchical classification of communities comparable to what "taxon" are for individuals.
+Species may be characteristic of some syntaxa.
+In the database, 3 tables allow to describe phytosociological classification:
+
+* *main.syntaxonomy* contains the syntaxa and their classification, exactly the same way *main.taxonomy* contains the taxa and their classification
+* *main.su_syn* associate communities from a sampling unit to a syntaxon
+* *main.sp_carac_syn* associates taxonomic denomination from a sampling unit (see table *main.tax\_ident*) to a syntaxon, in order to show that the taxon is characteristic of the syntaxon.
 
 
 
+\clearpage
 
+# Input code and database option
+
+Input codes are thought to be used for 2 main objectives:
+
+* to attribute right to read, modify or delete data on which they have authorization at the row level. The authorization system will be defined at the input level, but have consequences at the row level in each table: when a person who has authorization to read all metadata but only permissions on its own data, he will automatically see only some rows of the individual table, for example
+* to allow people to enter modification without deleting the original data. In the exportation modules, the database will be able to only export the last version of the data, but thanks to the input code, all the data history will be contained in the database table.
+
+However, this system is not clear, nor efficient at the database level.
+Then database option will be proposed to the user at the database creation moment, in order to be able to drop all the mechanism of database history, or the authorizations.
+If both these options are dropped, the input code will only remain on the sampling unit tables and plot tables which allow to associate all the data to a single event of data input.
+If only the "keep-history" option is dropped, the unique constraint will change in almost all table: for example, the individuals in a sampling unit are now unique, by input code, in order to be able to correct their names in a second input.
+If the option is dropped, then every individual name will be unique in a sampling unit, without considering the input it is part of.
+Therefore, the unique options will in general make much more "physical" sense without the "keep-history" option, and allow a more efficient data management.
 
 
 
