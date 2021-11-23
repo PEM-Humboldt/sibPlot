@@ -25,7 +25,6 @@ header-includes:
 
 ***************
 
-
 ```{r, setup, message=F, warning=F, include=F}
 require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
 def.chunk.hook  <- knitr::knit_hooks$get("chunk")
@@ -38,31 +37,13 @@ opts_chunk$set(cache=F,fig.path="../../Fig/data_model",tidy='styler',cache.rebui
 options(knitr.kable.NA = '---')
 ```
 
-**Connection as database admin (to the postgres database)**
-
-```{r}
-sib_adm <- dbConnect(PostgreSQL(),dbname="sib_plot",user="sib_adm",password="sib")
-```
-
-Deleting the main schema for having a cleanstate:
-
-```{r}
-dbSendStatement(sib_adm,"DROP SCHEMA main CASCADE")
-dbSendStatement(sib_adm,"CREATE SCHEMA main AUTHORIZATION sib")
-dbDisconnect(sib_adm)
-```
+# Representing the relationships between tables
 
 ```{r}
 sib_plot <- dbConnect(PostgreSQL(), user = "sib_user", dbname = "sib_plot", password = "pw")
 ```
 
-```{bash}
-psql  -f ../notR/sql_database/creationdb.sql -U sib_user -d sib_plot # -a
-psql  -f ../notR/sql_database/spatialFields.sql -U sib_user -d sib_plot # -a
-psql  -f ../notR/sql_database/insertDictionaries.sql -U sib_user -d sib_plot # -a 
-```
-
-```{r, out.height="40cm"}
+```{r, echo=T, fig.show='hide'}
 source("../functions/export_svg.R")
 require(dm)
 (dm_object<-dm_from_src(sib_plot,schema="main"))
@@ -84,20 +65,21 @@ grid::grid.raster(img)
 
 
 
-# Generalities
-
 ```{r fig.cap="\\label{fig:data_mod_comp}Relational Data Model in the sibPlot database with phytosociological data and permanent plots. Tables in red are general tables, green tables are for the permanent plot submodel, lightblue tables are tables for the composition data submodel (without individual data but abundances/coverage of species), darkblue tables are part of the phytosociological (with syntaxonomic information)."}
 knitr::include_graphics(B)
 ```
 
-Useful functions to analyse the database specifications are found in the file [extractPostgresSpec.R](../functions/extractPostgresSpec.R)
+\clearpage
+
+# Shared tables
+
+Useful functions to analyse the database specifications are found in the file [extractPostgresSpec.R](https://github.com/marbotte/sibPlot/blob/data_model/functions/extractPostgresSpec.R)
 
 ```{r}
 source("../functions/extractPostgresSpec.R")
 ```
 
 
-# Shared tables
 
 The "shared tables" are the basic tables of the model (red in fig \ref{fig:data_mod_comp}), they are the center of the model and are parts of all the sub- data models.
 
@@ -193,9 +175,8 @@ This system will work by watching the data input id associated with the lines of
 
 **Collective decision to make and questions on the data**
 
-1. To decide on mixing lab/field work with data input (it makes it all simple in terms on following operations through time but might lower the information system efficiency)
-1. To decide on the possibility of the "keep-all" mode of the database
-1. Should the field activities be defined at a plot level or a sampling unit level (= Is it possible that people go on different dates in the different sampling unit of the same plot?)
+1. \textcolor{red}{To decide on the possibility of the "keep-all" mode of the database}
+1. \textcolor{red}{Should the field activities be defined at a plot level or a sampling unit level (= Is it possible that people go on different dates in the different sampling unit of the same plot?)}
 
 ******
 
@@ -276,7 +257,7 @@ if(nrow(other_constraint)>0)
 }
 ```
 
-Comments on the tables and their specifications (tables [...]):
+**Comments on the tables and their specifications** (tables \ref{tab:colSpecMainPlot} to \ref{tab:othConstMainFieldWork}):
 
 1. plot names must be unique in all the database (see table \ref{tab:colSpecMainPlot}) 
 1. sampling unit names need to be unique in a plot (see table \ref{tab:othConstMainSamplingUnit})
@@ -284,12 +265,12 @@ Comments on the tables and their specifications (tables [...]):
 1. in one input batch there should not be more than one fieldwork concerning a particular sampling unit (see table \ref{tab:othConstMainFieldWork})
 
 
-*********
 
+*********
 **Collective decisions to make and questions on the data**
 
-1. Should we consider the possibility of spatial data at the scale of the sampling unit?
-1. How should the new sampling unit/activity link table should be connected with the participation table (should we separate the people going to a sampling unit and not another or should the participation be considered at the level of the whole activity/event)
+1. \textcolor{red}{Should we consider the possibility of spatial data at the scale of the sampling unit?}
+1. \textcolor{red}{How should the new sampling unit/activity link table should be connected with the participation table (should we separate the people going to a sampling unit and not another or should the participation be considered at the level of the whole activity/event)}
 
 **********
 
@@ -362,7 +343,7 @@ I thought that people should be stored in a different table than their participa
 That allows people to have various activities, with different institutions, emails etc.
 
 I believe that this information should be considered metadata, and made available, but some personal data rules may apply here...
-We could also made only available the last mail adresses of the people... without their names.
+We could also make  available only the last mail addresses of the people... without their names.
 All of these may be enforced by options during the database creation, in order to make people responsible of their choices in front of their legal obligations, depending on their institutions, countries etc.
 
 There will be all a process of recognizing people and merging the cases where people are denominated with initials, first names, first etc.
@@ -380,7 +361,19 @@ Note that since the *cd_ev* is mandatory for entering a participation, no partic
 People might be entered various time in an activity, if they participated with various roles.
 
 Right now, we will consider only one text for sponsor and institution, but it might be interesting later to complexify the data structure, in order to allow people to have various institutions or various sponsor, separated in the database, but referencing one only participation...
-That might already be done by separating roles though (I go to the field as a botanist sponsored by the Humboldt institute, and as a logistician sponsored by the European Union). All of these things should be decided collectively, I just made a first proposal here.`
+That might already be done by separating roles though (I go to the field as a botanist sponsored by the Humboldt institute, and as a logistician sponsored by the European Union). All of these things should be decided collectively, I just made a first proposal here.
+
+*********
+**Collective decisions to make and questions on the data**
+
+1. \textcolor{red}{What personal policy do we want to follow/enforce?}
+1. \textcolor{red}{Is personal data metadata (made available by default)? That also allows not to repeat names because some of the users do not have the authorizations to read them}
+1. \textcolor{red}{Should we allow functions to recognise the compatibility between different forms of the same name, or just force people to give always complete names (not the case in the data for now!)?}
+1. \textcolor{red}{How do we manage the different sponsors, institutions, for a same person?}
+
+**********
+
+
 
 ```{r}
 specsCol <- dbGetColumnSpecs(sib_plot,"main","pers")
@@ -469,6 +462,13 @@ if(nrow(other_constraint)>0)
     kable_styling(font_size = 8)
 }
 ```
+
+*********
+**Collective decisions to make and questions on the data**
+
+1. \textcolor{red}{The taxonomic system is different from what proposed Roy, is that ok?}
+
+**********
 
 
 
@@ -620,7 +620,7 @@ Their specifications are described in tables \ref{tab:colSpecMainTagCensus} to \
 * ramets numbers are unique for an individual
 * all fields are mandatory in the tag census table
 * mortality can only be entered once by tag (potentially modified in a new input)
-* alive_status is mandatory in the *tag\_measurement table*
+* alive\_status is mandatory in the *tag\_measurement table*
 * there can be only one measurement row by tag and input
 * all variable are text or double and none is categorized through a dictionary table for now.
 
@@ -629,12 +629,12 @@ Their specifications are described in tables \ref{tab:colSpecMainTagCensus} to \
 
 **Collective decisions to make and questions on the data**
 
-1. Should fieldwork be only referenced at the ramet level?
-1. Should aliveStatus be deleted and all ramets not dead considered alive? There are 3 ways here:
-   + keeping an alive status table
-   + putting a (potentially mandatory) aliveStatus column to the tag measurement tables
-   + Just keep the mortality table (considering that what is not declared dead is alive!)
-1. Should we categorize mortality variables and alive_status (through a definition table referenced by foreign key)
+1. \textcolor{red}{Should fieldwork be only referenced at the ramet level?}
+1. \textcolor{red}{Should aliveStatus be deleted and all ramets not dead considered alive? There are 3 ways here: }
+   + \textcolor{red}{keeping an alive status table}
+   + \textcolor{red}{putting a (potentially mandatory) aliveStatus column to the tag measurement tables}
+   + \textcolor{red}{Just keep the mortality table (considering that what is not declared dead is alive!)}
+1. \textcolor{red}{Should we categorize mortality variables and alive\_status (through a definition table referenced by foreign key)}
 
 
 **********
@@ -748,6 +748,15 @@ If only the "keep-history" option is dropped, the unique constraint will change 
 If the option is dropped, then every individual name will be unique in a sampling unit, without considering the input it is part of.
 Therefore, the unique options will in general make much more "physical" sense without the "keep-history" option, and allow a more efficient data management.
 
+
+*********
+
+**Collective decisions to make and questions on the data**
+
+1. \textcolor{red}{Do we make a keep-all-history mode?}
+1. \textcolor{red}{Is the authorization by row something we implement, or at least keep possible? Note: will be relatively easy to implement with postgreSQL, hell-difficult with SQLite!}
+
+**********
 
 
 

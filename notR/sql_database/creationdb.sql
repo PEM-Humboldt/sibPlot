@@ -328,3 +328,4 @@ CREATE TABLE main.su_syn
   cd_syn int REFERENCES main.syntaxonomy(id_syn) NOT NULL,
   cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
+
