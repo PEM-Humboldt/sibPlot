@@ -175,8 +175,8 @@ This system will work by watching the data input id associated with the lines of
 
 **Collective decision to make and questions on the data**
 
-1. \textcolor{red}{To decide on the possibility of the "keep-all" mode of the database}
-1. \textcolor{red}{Should the field activities be defined at a plot level or a sampling unit level (= Is it possible that people go on different dates in the different sampling unit of the same plot?)}
+1. \textcolor{red}{To decide on the possibility of the "keep-all" mode of the database} ==> justified for determinations... not really for other parameters which can be modified definitively if the owner of the data decide to do it (with warnings and records of the operation in the database)
+1. \textcolor{red}{Should the field activities be defined at a plot level or a sampling unit level (= Is it possible that people go on different dates in the different sampling unit of the same plot?)} ==> sampling unit
 
 ******
 
@@ -269,8 +269,8 @@ if(nrow(other_constraint)>0)
 *********
 **Collective decisions to make and questions on the data**
 
-1. \textcolor{red}{Should we consider the possibility of spatial data at the scale of the sampling unit?}
-1. \textcolor{red}{How should the new sampling unit/activity link table should be connected with the participation table (should we separate the people going to a sampling unit and not another or should the participation be considered at the level of the whole activity/event)}
+1. \textcolor{red}{Should we consider the possibility of spatial data at the scale of the sampling unit?} ==> the possibility should exist
+1. \textcolor{red}{How should the new sampling unit/activity link table should be connected with the participation table (should we separate the people going to a sampling unit and not another or should the participation be considered at the level of the whole activity/event)} ==> the possibility should exist
 
 **********
 
@@ -366,10 +366,10 @@ That might already be done by separating roles though (I go to the field as a bo
 *********
 **Collective decisions to make and questions on the data**
 
-1. \textcolor{red}{What personal policy do we want to follow/enforce?}
-1. \textcolor{red}{Is personal data metadata (made available by default)? That also allows not to repeat names because some of the users do not have the authorizations to read them}
-1. \textcolor{red}{Should we allow functions to recognise the compatibility between different forms of the same name, or just force people to give always complete names (not the case in the data for now!)?}
-1. \textcolor{red}{How do we manage the different sponsors, institutions, for a same person?}
+1. \textcolor{red}{What personal policy do we want to follow/enforce?} ==> people will want to be recognized, should not be a problem
+1. \textcolor{red}{Is personal data metadata (made available by default)? That also allows not to repeat names because some of the users do not have the authorizations to read them} 
+1. \textcolor{red}{Should we allow functions to recognise the compatibility between different forms of the same name, or just force people to give always complete names (not the case in the data for now!)?} ==> repetition of names will not be a problem for now
+1. \textcolor{red}{How do we manage the different sponsors, institutions, for a same person?} ==> solution proposed in text
 
 **********
 
@@ -466,7 +466,7 @@ if(nrow(other_constraint)>0)
 *********
 **Collective decisions to make and questions on the data**
 
-1. \textcolor{red}{The taxonomic system is different from what proposed Roy, is that ok?}
+1. \textcolor{red}{The taxonomic system is different from what proposed Roy, is that ok?} ==> OK
 
 **********
 
@@ -629,10 +629,10 @@ Their specifications are described in tables \ref{tab:colSpecMainTagCensus} to \
 
 **Collective decisions to make and questions on the data**
 
-1. \textcolor{red}{Should fieldwork be only referenced at the ramet level?}
+1. \textcolor{red}{Should fieldwork be only referenced at the ramet level?} ==> No
 1. \textcolor{red}{Should aliveStatus be deleted and all ramets not dead considered alive? There are 3 ways here: }
    + \textcolor{red}{keeping an alive status table}
-   + \textcolor{red}{putting a (potentially mandatory) aliveStatus column to the tag measurement tables}
+   + \textcolor{red}{putting a (potentially mandatory) aliveStatus column to the tag measurement tables}==> OK
    + \textcolor{red}{Just keep the mortality table (considering that what is not declared dead is alive!)}
 1. \textcolor{red}{Should we categorize mortality variables and alive\_status (through a definition table referenced by foreign key)}
 
@@ -753,8 +753,8 @@ Therefore, the unique options will in general make much more "physical" sense wi
 
 **Collective decisions to make and questions on the data**
 
-1. \textcolor{red}{Do we make a keep-all-history mode?}
-1. \textcolor{red}{Is the authorization by row something we implement, or at least keep possible? Note: will be relatively easy to implement with postgreSQL, hell-difficult with SQLite!}
+1. \textcolor{red}{Do we make a keep-all-history mode?} ==> only for taxonomy
+1. \textcolor{red}{Is the authorization by row something we implement, or at least keep possible? Note: will be relatively easy to implement with postgreSQL, hell-difficult with SQLite!} ==> to implement in postgres
 
 **********
 

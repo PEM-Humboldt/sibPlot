@@ -65,6 +65,9 @@ CREATE TABLE main.pers
   last_name varchar(50) NOT NULL,
   last_name_2 varchar(50),
   initial varchar(6),
+  email text UNIQUE,
+  name_deter text,
+  instit_current text,
   cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
   UNIQUE (first_name,middle_name,last_name,last_name_2,initial)
 );
@@ -79,10 +82,8 @@ CREATE TABLE main.partic
   institution text,
   sponsor text,
   comment text,
-  email text,
   cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
   UNIQUE (cd_pers,cd_ev,role_part)
-  --- note: not sure whether to put institutions, sponsors here or in a separate table
 );
 
 
@@ -154,6 +155,11 @@ CREATE TABLE main.sampling_unit
   UNIQUE (cd_plot, name_su)
 );
 
+CREATE TABLE main.sampling_unit_spat
+(
+  gid_su integer REFERENCES main.sampling_unit(id_su)
+);
+
 CREATE TABLE main.fieldwork
 (
   id_fw serial PRIMARY KEY,
@@ -215,13 +221,12 @@ CREATE TABLE main.ind_census
 CREATE TABLE main.xy_ind
 (
   id_xy serial PRIMARY KEY,
-  cd_ind integer REFERENCES main.ind_census(id_ind) NOT NULL,
+  cd_ind integer REFERENCES main.ind_census(id_ind) NOT NULL UNIQUE,
   x_m double precision NOT NULL,
   y_m double precision NOT NULL,
   comments text,
   cd_fw integer REFERENCES main.fieldwork(id_fw) NOT NULL,
-  cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
-  UNIQUE(cd_input,cd_ind)
+  cd_input integer REFERENCES main.input(cd_ev) NOT NULL
 );
 
 CREATE TABLE main.tag_census
@@ -232,8 +237,8 @@ CREATE TABLE main.tag_census
   tag varchar(10) NOT NULL,
   ramet integer NOT NULL,
   cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
-  UNIQUE(tag,cd_fw,cd_input),-- ensure that tags are unique for a particular fieldwork event (in a cd_input to allow for keeping modifications)
-  UNIQUE(cd_ind,ramet,cd_input) -- ensure that ramet numbers are unique for an individual (in a cd_input to allow for keeping modifications)
+  UNIQUE(tag,cd_fw),-- ensure that tags are unique for a particular fieldwork event (in a cd_input to allow for keeping modifications)
+  UNIQUE(cd_ind,ramet) -- ensure that ramet numbers are unique for an individual (in a cd_input to allow for keeping modifications)
 );
 
 CREATE TABLE main.tag_measurement
@@ -247,7 +252,7 @@ CREATE TABLE main.tag_measurement
   alive_status varchar(10) NOT NULL, -- check whether categorizable
   comments text,
   cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
-  UNIQUE(cd_tag,cd_fw,cd_input)
+  UNIQUE(cd_tag,cd_fw)
 );
 
 /*
@@ -278,7 +283,7 @@ CREATE TABLE main.tag_mortality
   killer_process varchar(30),
   comment text,
   cd_input integer REFERENCES main.input(cd_ev) NOT NULL,
-  UNIQUE(cd_tag,cd_input)
+  UNIQUE(cd_tag)
 );
 
 
