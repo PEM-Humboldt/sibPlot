@@ -31,8 +31,6 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 })
 opts_chunk$set(cache=F,fig.path="../../Fig/phytosoc_read",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize')
 options(knitr.kable.NA = '---')
-#fileFunctions<-dir("../sib_plot/functions/",pattern=".*\\.R")
-#sapply(fileFunctions,function(x)source(paste("../sib_plot/functions/",x,sep="")))
 ```
 
 
@@ -190,14 +188,7 @@ for i in range(len(files_xl)):
 # Specs
 
 ```{r}
-source_rmd <- function(file, local = FALSE, ...){
-  options(knitr.duplicate.label = 'allow')
-  tempR <- tempfile(tmpdir = ".", fileext = ".R")
-  on.exit(unlink(tempR))
-  knitr::purl(file, output=tempR, quiet = TRUE)
-  envir <- globalenv()
-  source(tempR, local = envir, ...)
-}
+source("../functions/source_rmd.R")
 ```
 
 
