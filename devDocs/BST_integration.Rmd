@@ -56,6 +56,7 @@ source("../scripts/codesR/2.imput.taxonomy.R")
 source("../scripts/codesR/3.imput.censuses.census0.R")
 source("../scripts/codesR/4.imput.dates.R")
 source("../scripts/codesR/5.imput.members.R")
+source("../scripts/codesR/6.input.census1.R")
 ```
 
 Roy's scripts consist in storing all the data in a *"dataForests"* variable.
@@ -69,9 +70,124 @@ names(dataForests)
 
 ## Separating event and inputs
 
+The first thing to do is to check, by plots, which files/data we have
+
 ```{r}
-namesDates <- names(dataForests$dates)
+plotNames <- unique(c(
+names(dataForests$metadata),
+names(dataForests$taxonomy),
+names(dataForests$censuses$census0),
+names(dataForests$censuses$census1$growth1),
+names(dataForests$censuses$census1$mortality1),
+names(dataForests$censuses$census1$recruitment1),
+names(dataForests$dates),
+names(dataForests$members)
+))
+tabElementsPlot <- cbind(
+metadata = plotNames %in% names(dataForests$metadata),
+taxonomy = plotNames %in% names(dataForests$taxonomy),
+census0 = plotNames %in% names(dataForests$censuses$census0),
+census1 = plotNames %in% names(dataForests$censuses$census1$growth1),
+mortality1 = plotNames %in% names(dataForests$censuses$census1$mortality1),
+recruitment1 = plotNames %in% names(dataForests$censuses$census1$recruitment1),
+dates = plotNames %in% names(dataForests$dates),
+members = plotNames %in% names(dataForests$members)
+)
+rownames(tabElementsPlot) <- plotNames
+
+kable(tabElementsPlot, booktab = T, longtable = T, label = NA, caption = "\\label{elePlot}Elements given by plots") %>%
+  kable_styling(latex_options = c("repeat_header")) %>%
+  column_spec(2,background = ifelse(tabElementsPlot[,1],"CornflowerBlue","OrangeRed")) %>%
+  column_spec(3,background = ifelse(tabElementsPlot[,2],"CornflowerBlue","OrangeRed")) %>%
+  column_spec(4,background = ifelse(tabElementsPlot[,3],"CornflowerBlue","OrangeRed")) %>%
+  column_spec(5,background = ifelse(tabElementsPlot[,4],"CornflowerBlue","OrangeRed")) %>%
+  column_spec(6,background = ifelse(tabElementsPlot[,5],"CornflowerBlue","OrangeRed")) %>%
+  column_spec(7,background = ifelse(tabElementsPlot[,6],"CornflowerBlue","OrangeRed")) %>%
+  column_spec(8,background = ifelse(tabElementsPlot[,7],"CornflowerBlue","OrangeRed")) %>%
+  column_spec(9,background = ifelse(tabElementsPlot[,8],"CornflowerBlue","OrangeRed"))
+```
+
+### dates from the dates and other tables
+
+In table \ref{elePlot}, we can see that some of the plots do not have any information concerning the dates, which might become problematic when we will assign them a cd_input...
+
+The thing is, if they have a taxonomy tables, there might be record dates that might serve as field dates...
+So, we need to check what is the relationship between dates given for taxonomy and date tables.
+
+
+```{r, warning=FALSE}
+raw_csv <- lapply(dir(folderData,recursive = T,pattern="\\.csv$"),function(x,d)
+{read.csv(paste0(d,x))},d=folderData)
+names(raw_csv) <- dir(folderData, recursive = T, pattern = "\\.csv$")
+rawCsvRead<-
+datesTaxonomy <- lapply(dataForests$taxonomy,function(x)unique(na.omit(x$eventDate)))
+gpsDateTaxonomy <- sapply(datesTaxonomy,function(x)
+  {
+  if ( length(x) == 0 ) return(data.frame(start = NULL, end = NULL))
+  if ( length(x) == 1 ) return(data.frame(start = x, end = x))
+  gps <- cutree(hclust(dist(x)),h = 15)
+  return(Reduce(rbind,tapply(x,gps,function(y)data.frame(start=min(y), end=max(y)),simplify = F)))
+  }
+  )
+
+A<-lapply(plotNames,function(x,y,z)
+{
+  list(date1=y[[x]],date2=z[[x]])
+},y=dataForests$dates,z=gpsDateTaxonomy)
+```
+
+Here is an example where the dates as read by Roy's function may be false:
+
+```{r}
+gpsDateTaxonomy$RosarioIntermedio
+dataForests$dates$RosarioIntermedio
+raw_csv$`dates/dates_RosarioIntermedio.csv`
+unique(raw_csv$`taxonomy/taxonomy_RosarioIntermedio.csv`$eventDate)
+```
+
+Instead of march, the dates should be the 3rd of december.
+Therefore, to avoid this kind of problems, we need to read all of the dates given for a plot at once, in order to choose the format which allows to make a group of dates where the distances are minimal.
+
+******************
+
+**The dates may have problems, but resolving those may be very complicated and would not guarantee for sure that no error is still there.
+Therefore, we'll keep them here and make some clear messages in the import functions, so people can correct them by hand**
+
+*****************
+
+### separation by input
+
+```{r}
+#require(vistime)
+(namesDates <- names(dataForests$dates))
 tabEvents<-data.frame(plot=rep(namesDates,sapply(dataForests$dates,nrow)),Reduce(rbind,dataForests$dates))
+#forGraph<-data.frame(event=tabEvents$measuringType,start = tabEvents$eventDate)
+#vistime(forGraph)
+sort(tabEvents$eventDate)
+tabEvents <- tabEvents[order(tabEvents$eventDate),]
+inputs<-vector(mode="list",length=nrow(tabEvents))
+for(i in 1:length(inputs))
+{
+  inputs[[i]]$dates<-tabEvents[i,]
+}
+names(dataForests)
+A <- lapply(inputs,function(x,l2)
+{
+  res <- list()
+  plotName <- x$dates$plot
+  typeCensus <- x$dates$measuringType
+  #metadata
+  res$metadata <- l2$metadata[[plotName]]
+  #census
+  if(typeCensus=="census0")
+  {
+    res$census <- l2$censuses$census0[[plotName]]
+  }else
+  {
+    
+  }
+  return(res)
+},l2 = dataForests)
 ```
 
 

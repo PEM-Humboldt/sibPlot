@@ -1,0 +1,113 @@
+---
+title: "Exporting the dataBase (Step 1 of the contract)"
+author: "Marius Bottin"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+   pdf_document:
+     toc: true
+     toc_depth: 5
+     number_sections: true
+     latex_engine: xelatex
+always_allow_html: true
+fontsize: 11pt
+geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
+linkcolor: gray
+urlcolor: blue
+citecolor: cyan
+header-includes:
+  - \usepackage{colortbl}
+  - \usepackage{xcolor}       
+  - \usepackage{lscape}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+--- 
+
+
+***************
+
+```{r, setup, message=F, warning=F, include=F}
+require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+opts_chunk$set(cache=F,fig.path="../../Fig/BST_integration",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize',
+               echo=T, message=T, warning=T)
+options(knitr.kable.NA = '---')
+```
+
+
+The idea here is to try and integrate the BST (Bosque Seco Tropical) data in the database, using Roy's scripts and the ones I added to it, without transforming them in re-usable functions just yet, in order to have a functional database, and to determine what will be the potential problems to address.
+
+
+# Reading the data with Roy's scripts
+
+```{r, warning=F}
+folderData <- "../../CodeRoy/BasesHumboldt-MV/core/"
+folderMetadata <- paste0(folderData,"metadata/")
+folderCensus0 <- paste0(folderData,"census0/")
+folderCensus1 <- paste0(folderData,"census1/")
+folderDates <- paste0(folderData,"dates/")
+folderMembers <- paste0(folderData,"members/")
+folderTaxonomy <- paste0(folderData,"taxonomy/")
+source("../scripts/codesR/1.imput.metadata.R")
+source("../scripts/codesR/2.imput.taxonomy.R")
+source("../scripts/codesR/3.imput.censuses.census0.R")
+source("../scripts/codesR/4.imput.dates.R")
+source("../scripts/codesR/5.imput.members.R")
+source("../scripts/codesR/6.input.census1.R")
+```
+
+Roy's scripts consist in storing all the data in a *"dataForests"* variable.
+```{r}
+names(dataForests)
+```
+
+
+# Formatting the data for export
+
+```{r}
+folExport<-"../../Export/"
+if(!file.exists(folExport))
+{
+  dir.create(folExport)
+}
+
+```
+
+
+
+```{r}
+dataBst<-list()
+dataBst$metadata<-Reduce(rbind,dataForests$metadata)
+dataBst$taxonomy<-data.frame(plot=rep(names(dataForests$taxonomy),sapply(dataForests$taxonomy,nrow)),Reduce(rbind,dataForests$taxonomy))
+dataBst$census0<-data.frame(plot=rep(names(dataForests$censuses$census0),sapply(dataForests$censuses$census0,nrow)),Reduce(rbind,dataForests$censuses$census0))
+dataBst$mortality<-data.frame(plot=rep(names(dataForests$censuses$census1$mortality1),sapply(dataForests$censuses$census1$mortality1,nrow)),Reduce(rbind,dataForests$censuses$census1$mortality1))
+dataBst$recruitment<-data.frame(plot=rep(names(dataForests$censuses$census1$recruitment1),sapply(dataForests$censuses$census1$recruitment1,nrow)),Reduce(rbind,dataForests$censuses$census1$recruitment1))
+dataBst$growth<-data.frame(plot=rep(names(dataForests$censuses$census1$growth1),sapply(dataForests$censuses$census1$growth1,nrow)),Reduce(rbind,dataForests$censuses$census1$growth1))
+dataBst$members<- data.frame(plot=rep(names(dataForests$members),sapply(dataForests$members,nrow)),Reduce(rbind,dataForests$members))
+dataBst$date<- data.frame(plot=rep(names(dataForests$date),sapply(dataForests$date,nrow)),Reduce(rbind,dataForests$date))
+```
+
+## R
+
+```{r}
+save(dataBst,file=paste0(folExport,"exportDataBst.RData"))
+```
+
+
+## Excel
+
+```{r}
+wb <- openxlsx::createWorkbook()
+for(i in 1:length(dataBst)){
+  openxlsx::addWorksheet(wb,names(dataBst)[i])
+  openxlsx::writeDataTable(wb,names(dataBst)[i],x = dataBst[[i]])
+}
+openxlsx::saveWorkbook(wb,file=paste0(folExport,"dataBst.xlsx"))
+```
+
+
+
+
