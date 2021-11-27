@@ -1,129 +1,143 @@
 require(openxlsx)
+#
+#readUTF8 <- function(x)
+#{
+#  readLines(x, warn = FALSE, encoding = "UTF-8")
+#}
+#
+#removeHeadTag <- function (x) 
+#{
+#  x <- paste(x, collapse = "")
+#  if (any(grepl("<\\?", x))) {
+#    x <- gsub("<\\?xml [^>]+", "", x)
+#  }
+#  x <- gsub("^>", "", x)
+#  x
+#}
+#getRId <- function (x) 
+#{
+#  regmatches(x, gregexpr("(?<= r:id=\")[0-9A-Za-z]+", x, perl = TRUE))
+#}
+#
+#
+#replaceXMLEntities <- function (v) 
+#{
+#  v <- gsub("&amp;", "&", v, fixed = TRUE)
+#  v <- gsub("&quot;", "\"", v, fixed = TRUE)
+#  v <- gsub("&apos;", "'", v, fixed = TRUE)
+#  v <- gsub("&lt;", "<", v, fixed = TRUE)
+#  v <- gsub("&gt;", ">", v, fixed = TRUE)
+#  return(v)
+#}
+#
+#getSharedStringsFromFile <- function (sharedStringsFile, isFile) 
+#{
+#  sharedStrings <- openxlsx:::get_shared_strings(xmlFile = sharedStringsFile, 
+#                                      isFile = isFile)
+#  Encoding(sharedStrings) <- "UTF-8"
+#  z <- tolower(sharedStrings)
+#  sharedStrings[z == "true"] <- "TRUE"
+#  sharedStrings[z == "false"] <- "FALSE"
+#  z <- NULL
+#  sharedStrings <- replaceXMLEntities(sharedStrings)
+#  return(sharedStrings)
+#}
+#
+#mergeCell2mapping <- function (x) 
+#{
+#  refs <- regmatches(x, regexpr("(?<=ref=\")[A-Z0-9:]+", x, 
+#                                perl = TRUE))
+#  refs <- strsplit(refs, split = ":")
+#  rows <- lapply(refs, function(r) {
+#    r <- as.integer(gsub(pattern = "[A-Z]", replacement = "", 
+#                         r, perl = TRUE))
+#    seq(from = r[1], to = r[2], by = 1)
+#  })
+#  cols <- lapply(refs, function(r) {
+#    r <- convertFromExcelRef(r)
+#    seq(from = r[1], to = r[2], by = 1)
+#  })
+#  refs <- do.call("rbind", lapply(seq_along(rows), function(i) {
+#    tmp <- expand.grid(cols = cols[[i]], rows = rows[[i]])
+#    tmp$ref <- paste0(openxlsx:::convert_to_excel_ref(cols = tmp$cols, 
+#                                           LETTERS = LETTERS), tmp$rows)
+#    tmp$anchor_cell <- tmp$ref[1]
+#    return(tmp[, c("anchor_cell", "ref", "rows")])
+#  }))
+#  refs <- refs[refs$anchor_cell != refs$ref, ]
+#  return(refs)
+#}
+#
+#
+## From read.xlsx.default
+#getCellMerge <- function(xlsxFile,sheet)
+#{
+#  na.strings<-"NA"
+#  rows<-NA
+#  xmlDir <- file.path(tempdir(), paste0(sample(LETTERS, 10), collapse = ""), "_excelXMLRead")
+#  xmlFiles <- unzip(xlsxFile, exdir = xmlDir)
+#  on.exit(unlink(xmlDir, recursive = TRUE), add = TRUE)
+#  sharedStringsFile <- grep("sharedStrings.xml$", xmlFiles, perl = TRUE, value = TRUE)
+#  workbook <- grep("workbook.xml$", xmlFiles, perl = TRUE, value = TRUE)
+#  workbookRelsXML <- grep("workbook.xml.rels$", xmlFiles, perl = TRUE, value = TRUE)
+#  workbookRelsXML <- paste(readUTF8(workbookRelsXML), collapse = "")
+#  workbookRelsXML <- openxlsx:::getChildlessNode(xml = workbookRelsXML, tag = "Relationship")
+#  workbook <- unlist(readUTF8(workbook))
+#  sheets <- unlist(regmatches(workbook, gregexpr("(?<=<sheets>).*(?=</sheets>)", workbook, perl = TRUE)))
+#  sheets <- unlist(regmatches(sheets, gregexpr("<sheet[^>]*>", sheets, perl = TRUE)))
+#  sheets <- grep("r:id=\"[[:blank:]]*\"", sheets, invert = TRUE, value = TRUE)
+#  sheetrId <- unlist(getRId(sheets))
+#  sheetNames <- unlist(regmatches(sheets, gregexpr("(?<=name=\")[^\"]+", sheets, perl = TRUE)))
+#  sheetNames <- replaceXMLEntities(sheetNames)
+#  nSheets <- length(sheetrId)
+#  file_name <- sapply(sheetrId, function(rId) {
+#    txt <- grep(sprintf("Id=\"%s\"", rId), workbookRelsXML, fixed = TRUE, value = TRUE)
+#    regmatches(txt, regexpr("(?<=Target=\").+xml(?=\")", txt, perl = TRUE))
+#  })
+#  sheetNames <- openxlsx:::replaceXMLEntities(sheetNames)
+#  sheetInd <- which(sheetNames == sheet)
+#  sheet <- file_name[sheetInd]
+#  worksheet <- xmlFiles[grepl(tolower(sheet), tolower(xmlFiles), fixed = TRUE)]
+#  
+#  # Not quite sure what is the goal of "sharedStrings"
+#  if (length(sharedStringsFile) > 0) {
+#    sharedStrings <- getSharedStringsFromFile(sharedStringsFile = sharedStringsFile, isFile = TRUE)
+#    if (!is.null(na.strings)) {
+#      sharedStrings[is.na(sharedStrings) | sharedStrings %in% na.strings] <- "openxlsx_na_vlu"
+#    }
+#  }else {
+#    sharedStrings <- ""
+#  }
+#  
+#  startRow<-1
+#  
+#  rows <- NA
+#  skipEmptyRows <- FALSE
+#  detectDates<- FALSE
+#  
+#  cell_info <- openxlsx:::getCellInfo(xmlFile = worksheet, sharedStrings = sharedStrings, skipEmptyRows = skipEmptyRows, startRow = startRow, rows = rows, getDates = detectDates)
+#  
+#  regex="^<mergeCell ref=\"([A-Z]{1,4}[0-9]{1,7}:[A-Z]{1,4}[0-9]{1,7})\"/>$"
+#  stopifnot(all(grepl(regex,cell_info$cellMerge)))
+#  cellMerge<-sub(regex,"\\1",cell_info$cellMerge)
+#  return(cellMerge)
+#}
+#
 
-readUTF8 <- function(x)
+# From... me!
+
+getCellMerge <- function(wb, sheet)
 {
-  readLines(x, warn = FALSE, encoding = "UTF-8")
-}
-
-removeHeadTag <- function (x) 
-{
-  x <- paste(x, collapse = "")
-  if (any(grepl("<\\?", x))) {
-    x <- gsub("<\\?xml [^>]+", "", x)
-  }
-  x <- gsub("^>", "", x)
-  x
-}
-getRId <- function (x) 
-{
-  regmatches(x, gregexpr("(?<= r:id=\")[0-9A-Za-z]+", x, perl = TRUE))
-}
-
-
-replaceXMLEntities <- function (v) 
-{
-  v <- gsub("&amp;", "&", v, fixed = TRUE)
-  v <- gsub("&quot;", "\"", v, fixed = TRUE)
-  v <- gsub("&apos;", "'", v, fixed = TRUE)
-  v <- gsub("&lt;", "<", v, fixed = TRUE)
-  v <- gsub("&gt;", ">", v, fixed = TRUE)
-  return(v)
-}
-
-getSharedStringsFromFile <- function (sharedStringsFile, isFile) 
-{
-  sharedStrings <- openxlsx:::get_shared_strings(xmlFile = sharedStringsFile, 
-                                      isFile = isFile)
-  Encoding(sharedStrings) <- "UTF-8"
-  z <- tolower(sharedStrings)
-  sharedStrings[z == "true"] <- "TRUE"
-  sharedStrings[z == "false"] <- "FALSE"
-  z <- NULL
-  sharedStrings <- replaceXMLEntities(sharedStrings)
-  return(sharedStrings)
-}
-
-mergeCell2mapping <- function (x) 
-{
-  refs <- regmatches(x, regexpr("(?<=ref=\")[A-Z0-9:]+", x, 
-                                perl = TRUE))
-  refs <- strsplit(refs, split = ":")
-  rows <- lapply(refs, function(r) {
-    r <- as.integer(gsub(pattern = "[A-Z]", replacement = "", 
-                         r, perl = TRUE))
-    seq(from = r[1], to = r[2], by = 1)
-  })
-  cols <- lapply(refs, function(r) {
-    r <- convertFromExcelRef(r)
-    seq(from = r[1], to = r[2], by = 1)
-  })
-  refs <- do.call("rbind", lapply(seq_along(rows), function(i) {
-    tmp <- expand.grid(cols = cols[[i]], rows = rows[[i]])
-    tmp$ref <- paste0(openxlsx:::convert_to_excel_ref(cols = tmp$cols, 
-                                           LETTERS = LETTERS), tmp$rows)
-    tmp$anchor_cell <- tmp$ref[1]
-    return(tmp[, c("anchor_cell", "ref", "rows")])
-  }))
-  refs <- refs[refs$anchor_cell != refs$ref, ]
-  return(refs)
-}
-
-
-# From read.xlsx.default
-getCellMerge <- function(xlsxFile,sheet)
-{
-  na.strings<-"NA"
-  rows<-NA
-  xmlDir <- file.path(tempdir(), paste0(sample(LETTERS, 10), collapse = ""), "_excelXMLRead")
-  xmlFiles <- unzip(xlsxFile, exdir = xmlDir)
-  on.exit(unlink(xmlDir, recursive = TRUE), add = TRUE)
-  sharedStringsFile <- grep("sharedStrings.xml$", xmlFiles, perl = TRUE, value = TRUE)
-  workbook <- grep("workbook.xml$", xmlFiles, perl = TRUE, value = TRUE)
-  workbookRelsXML <- grep("workbook.xml.rels$", xmlFiles, perl = TRUE, value = TRUE)
-  workbookRelsXML <- paste(readUTF8(workbookRelsXML), collapse = "")
-  workbookRelsXML <- openxlsx:::getChildlessNode(xml = workbookRelsXML, tag = "Relationship")
-  workbook <- unlist(readUTF8(workbook))
-  sheets <- unlist(regmatches(workbook, gregexpr("(?<=<sheets>).*(?=</sheets>)", workbook, perl = TRUE)))
-  sheets <- unlist(regmatches(sheets, gregexpr("<sheet[^>]*>", sheets, perl = TRUE)))
-  sheets <- grep("r:id=\"[[:blank:]]*\"", sheets, invert = TRUE, value = TRUE)
-  sheetrId <- unlist(getRId(sheets))
-  sheetNames <- unlist(regmatches(sheets, gregexpr("(?<=name=\")[^\"]+", sheets, perl = TRUE)))
-  sheetNames <- replaceXMLEntities(sheetNames)
-  nSheets <- length(sheetrId)
-  file_name <- sapply(sheetrId, function(rId) {
-    txt <- grep(sprintf("Id=\"%s\"", rId), workbookRelsXML, fixed = TRUE, value = TRUE)
-    regmatches(txt, regexpr("(?<=Target=\").+xml(?=\")", txt, perl = TRUE))
-  })
-  sheetNames <- openxlsx:::replaceXMLEntities(sheetNames)
-  sheetInd <- which(sheetNames == sheet)
-  sheet <- file_name[sheetInd]
-  worksheet <- xmlFiles[grepl(tolower(sheet), tolower(xmlFiles), fixed = TRUE)]
-  
-  # Not quite sure what is the goal of "sharedStrings"
-  if (length(sharedStringsFile) > 0) {
-    sharedStrings <- getSharedStringsFromFile(sharedStringsFile = sharedStringsFile, isFile = TRUE)
-    if (!is.null(na.strings)) {
-      sharedStrings[is.na(sharedStrings) | sharedStrings %in% na.strings] <- "openxlsx_na_vlu"
-    }
-  }else {
-    sharedStrings <- ""
-  }
-  
-  startRow<-1
-  
-  rows <- NA
-  skipEmptyRows <- FALSE
-  detectDates<- FALSE
-  
-  cell_info <- openxlsx:::getCellInfo(xmlFile = worksheet, sharedStrings = sharedStrings, skipEmptyRows = skipEmptyRows, startRow = startRow, rows = rows, getDates = detectDates)
-  
-  regex="^<mergeCell ref=\"([A-Z]{1,4}[0-9]{1,7}:[A-Z]{1,4}[0-9]{1,7})\"/>$"
-  stopifnot(all(grepl(regex,cell_info$cellMerge)))
-  cellMerge<-sub(regex,"\\1",cell_info$cellMerge)
+  nbSheet <- which(sheet == names(wb))
+  stringMerge <- wb$worksheets[[nbSheet]]$mergeCells
+  regex <- "^<mergeCell ref=\"([A-Z]{1,4}[0-9]{1,7}:[A-Z]{1,4}[0-9]{1,7})\"/>$"
+  stopifnot(all(grepl(regex, stringMerge)))
+  cellMerge <- sub(regex,"\\1",stringMerge)
   return(cellMerge)
 }
-
-xlAd2rowCol<-function(xlAd)
+####### END ###########
+  
+xlAd2rowCol <- function(xlAd)
 {
   regex_a<-"^([A-Z]*)([0-9]*)"
   col_let<-sub(regex_a,"\\1",xlAd)
@@ -141,8 +155,9 @@ xlAd2rowCol<-function(xlAd)
   col<- match(col_let,ref_let)
   return(data.frame(xlAd,col_let,col,row))
 }
+######### END ###########
 
-# From... me!
+
 treatCellRange<-function(cellRange)
 {
    splitRange<-strsplit(cellRange,":")
@@ -160,7 +175,7 @@ treatCellRange<-function(cellRange)
      ncol=(to_num$col-from_num$col)+1
    ))
 }
-
+##############END ###############
 
 
 xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_unMerged=NA,overwrite=T)
@@ -186,7 +201,7 @@ xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_
   wb<-openxlsx::loadWorkbook(fileXl)
   data_wb<-lapply(sheetNames,openxlsx::read.xlsx,xlsxFile=wb, colNames=F, detectDates=T, skipEmptyRows=F, skipEmptyCols=F)
   names(data_wb)<-sheetNames
-  mergedCells<-lapply(sheetNames,getCellMerge,xlsxFile=fileXl)
+  mergedCells<-lapply(sheetNames,getCellMerge,wb=wb)
   names(mergedCells)<-sheetNames
   mergedCells_t<-lapply(mergedCells,function(x)
     if(length(x)>0)
@@ -243,5 +258,4 @@ xl_fillMerged<-function(fileXl,getWorkbook=F,writeFile=!is.na(dos_unMerged),dos_
   }
   
 }
-
-
+################# END #############

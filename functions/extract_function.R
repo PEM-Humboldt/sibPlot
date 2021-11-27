@@ -1,7 +1,7 @@
 extractFunction <- function(file, nameFunction, endMarker= "^#{3,} *END *#{3,}", commentBefore = T)
 {
   allFile <- readLines(file)
-  lineBegin <- which(grepl(paste0("\<",nameFunction,"\>"), allFile) & grepl("<- ?function",allFile))
+  lineBegin <- which(grepl(paste0("\\<",nameFunction,"\\>"), allFile) & grepl("<- ?function",allFile) & !grepl("^#",allFile))
   stopifnot(length(lineBegin) == 1)
   lineEnds <- grep(endMarker,allFile)
   stopifnot(length(lineEnds) > 0)

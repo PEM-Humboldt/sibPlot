@@ -1,16 +1,7 @@
-## -----------------------------------------------------------------------------
-dev=T
-if(dev)
-{
-  require(openxlsx)
-}
-
 
 
 # the function xl_sep_table allows to find various table in a excel sheet and to separate them, it then store them in a list which is the return of the function.
 # Note: work only with tables separated in lines, not in columns
-
-
 xl_sep_table<-function(file,sheet)
 {
   wb<-loadWorkbook(file)
@@ -36,4 +27,4 @@ xl_sep_table<-function(file,sheet)
   # reading the regions and returning them in a list
   return(lapply(tabs$name,function(x,wb,sh)read.xlsx(xlsxFile=wb,sheet=sh,namedRegion = x),wb=wb,sh=sheet))
 }
-
+###### END #######
