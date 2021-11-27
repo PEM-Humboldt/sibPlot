@@ -35,7 +35,15 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 opts_chunk$set(cache=F,fig.path="../../Fig/XL",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize',
                echo=T, message=T, warning=T)
 options(knitr.kable.NA = '---')
+source("../functions/extract_function.R")
+source("../functions/source_rmd.R")
 ```
+
+# Separating consecutive tables in an excel worksheet
+
+
+# Repeating merged cells in an excel file
+
 
 
 
