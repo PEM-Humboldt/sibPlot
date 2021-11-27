@@ -33,10 +33,11 @@ opts_chunk$set(cache=F,fig.path="./Fig/",tidy='styler',cache.rebuild = F,formatS
 
 ## Reading specification files from Roy
 
-```{r}
-purl("readingFile.Rmd")
-source("readingFile.R")
+
+```{r, code=extractFunction("../functions/readingFile.R",nameFunction = "xl_sep_table")}
+eval(parse(text=extractFunction("../functions/readingFile.R",nameFunction = "xl_sep_table")))
 ```
+
 Here we extract the specifications from Roy and we made it in a table which we will be able to modify in excel and use directly as an input data for checking compatibility of input files.
 
 ```{r, tidy=TRUE,tidy.opts=list(width.cutoff=70)}
