@@ -6,9 +6,9 @@
 dataForests$dates <- list()
 
 #################################################################################dates
-setwd("~/Dropbox/ForestsRDS/core/dates")
-for(ifile in 1:length(dir())) {
-	dates.file <- read.csv(dir()[ifile])
+#setwd("~/Dropbox/ForestsRDS/core/dates")
+for(ifile in 1:length(dir(folderDates))) {
+	dates.file <- read.csv(paste0(folderDates,dir(folderDates))[ifile])
 	dates.attributes <- c("measuringType", "eventDate", "comments")
 	dates.file.aux <- as.data.frame(matrix(NA, nrow=nrow(dates.file), ncol=length(dates.attributes), dimnames=list(c(), dates.attributes)))	
 	for (iname in 1:length(names(dates.file))) {
@@ -46,7 +46,7 @@ for(ifile in 1:length(dir())) {
 	}	               	
 	dates.file.aux$"comments" <- as.character(dates.file$"comments")
 	final.file <- dates.file.aux
-	temp.ext <- strsplit(strsplit(dir()[ifile], "_")[[1]][2], ".csv")[[1]]
+	temp.ext <- strsplit(strsplit(dir(folderDates)[ifile], "_")[[1]][2], ".csv")[[1]]
 	dataForests$dates[[ifile]] <- final.file
 	names(dataForests$dates)[ifile] <- temp.ext
 }

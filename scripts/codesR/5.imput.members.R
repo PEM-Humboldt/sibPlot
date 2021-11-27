@@ -6,9 +6,9 @@
 dataForests$members <- list()
 
 #################################################################################dates
-setwd("~/Dropbox/ForestsRDS/core/members")
-for(ifile in 1:length(dir())) {
-	members.file <- read.csv(dir()[ifile])
+#setwd("~/Dropbox/ForestsRDS/core/members")
+for(ifile in 1:length(dir(folderMembers))) {
+	members.file <- read.csv(paste0(folderMembers,dir(folderMembers))[ifile])
 	members.attributes <- c("firstName", 
 						    "middleName", 
 						    "lastName",
@@ -35,7 +35,7 @@ for(ifile in 1:length(dir())) {
 	members.file.aux$"fieldRole" <- as.character(members.file$"fieldRole")
 	members.file.aux$"comments" <- as.character(members.file$"comments")	
 	final.file <- members.file.aux
-	temp.ext <- strsplit(strsplit(dir()[ifile], "_")[[1]][2], ".csv")[[1]]
+	temp.ext <- strsplit(strsplit(dir(folderMembers)[ifile], "_")[[1]][2], ".csv")[[1]]
 	dataForests$members[[ifile]] <- final.file
 	names(dataForests$members)[ifile] <- temp.ext
 }

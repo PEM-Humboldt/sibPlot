@@ -5,9 +5,9 @@
 ################################################################################taxonomy
 dataForests$taxonomy <- list()
 
-setwd("~/Dropbox/ForestsRDS/core/taxonomy")
-for(ifile in 1:length(dir())) {
-	taxonomy.file <- as.data.frame(read.csv(dir()[ifile]))
+#setwd("~/Dropbox/ForestsRDS/core/taxonomy")
+for(ifile in 1:length(dir(folderTaxonomy))) {
+	taxonomy.file <- as.data.frame(read.csv(paste0(folderTaxonomy,dir(folderTaxonomy))[ifile]))
 	taxonomy.attributes <- c("code", 
 							 "tag", 
 							 "voucher", 
@@ -95,7 +95,7 @@ for(ifile in 1:length(dir())) {
 	}	               		
 	taxonomy.file.aux$"comments" <- as.character(taxonomy.file$"comments")
 	final.file <- taxonomy.file.aux
-	temp.ext <- strsplit(strsplit(dir()[ifile], "_")[[1]][2], ".csv")[[1]]
+	temp.ext <- strsplit(strsplit(dir(folderTaxonomy)[ifile], "_")[[1]][2], ".csv")[[1]]
 	dataForests$taxonomy[[ifile]] <- final.file
 	names(dataForests$taxonomy)[ifile] <- temp.ext
 }

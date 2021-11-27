@@ -4,9 +4,9 @@ dataForests <- list()
 
 ################################################################################metadata
 dataForests$metadata <- list()
-setwd("~/Dropbox/ForestsRDS/core/metadata")
-for(ifile in 1:length(dir())) {
-	metadata.file <- as.data.frame(t(read.csv(dir()[ifile], row.names=1)))	
+#setwd("~/Dropbox/ForestsRDS/core/metadata")
+for(ifile in 1:length(dir(folderMetadata))) {
+	metadata.file <- as.data.frame(t(read.csv(paste0(folderMetadata,dir(folderMetadata))[ifile], row.names=1)))	
 	metadata.attributes <- c("registerDate",
 							 "latitude_dec",
 							 "longitude_dec",
@@ -84,7 +84,7 @@ for(ifile in 1:length(dir())) {
 	metadata.file.aux$"forestAge_yrs" <- as.character(metadata.file$"forestAge_yrs") 
 	metadata.file.aux$"comments" <- as.character(metadata.file$"comments")
 	final.metaData <- metadata.file.aux
-	temp.ext <- strsplit(strsplit(dir()[ifile], "_")[[1]][2], ".csv")[[1]]
+	temp.ext <- strsplit(strsplit(dir(folderMetadata)[ifile], "_")[[1]][2], ".csv")[[1]]
 	rownames(final.metaData) <- temp.ext
 	dataForests$metadata[[ifile]] <- final.metaData
 	names(dataForests$metadata)[ifile] <- temp.ext
@@ -97,7 +97,7 @@ for (iplot in 1:length(dataForests$metadata)) {
 }
 
 for (iplot in 1:length(dataForests$metadata)) {
-	core <- sort(sapply(strsplit(sapply(strsplit(dir(), "_"), "[", 2), "\\."), "[", 1))
+	core <- sort(sapply(strsplit(sapply(strsplit(dir(folderMetadata), "_"), "[", 2), "\\."), "[", 1))
 	icore <- core[iplot]
 	
 	metadata <- sort(metadata)

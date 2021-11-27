@@ -6,9 +6,9 @@
 dataForests$censuses <- list()
 
 #################################################################################census0
-setwd("~/Dropbox/ForestsRDS/core/census0")
-for(ifile in 1:length(dir())) {
-	census0.file <- read.csv(dir()[ifile])
+#setwd("~/Dropbox/ForestsRDS/core/census0")
+for(ifile in 1:length(dir(folderCensus0))) {
+	census0.file <- read.csv(paste0(folderCensus0,dir(folderCensus0))[ifile])
 	census0.attributes <- c("tag", 
 							"code",
 							"subplot",
@@ -37,7 +37,7 @@ for(ifile in 1:length(dir())) {
 	census0.file.aux$"height_m" <- as.numeric(census0.file$"height_m")                  	
 	census0.file.aux$"comments" <- as.character(census0.file$"comments")
 	final.file <- census0.file.aux
-	temp.ext <- strsplit(strsplit(dir()[ifile], "_")[[1]][2], ".csv")[[1]]
+	temp.ext <- strsplit(strsplit(dir(folderCensus0)[ifile], "_")[[1]][2], ".csv")[[1]]
 	dataForests$censuses$census0[[ifile]] <- final.file
 	names(dataForests$censuses$census0)[ifile] <- temp.ext
 }
@@ -57,17 +57,19 @@ if(all(names(dataForests$taxonomy) %in% names(dataForests$censuses$census0))) {
 	warning(paste0("plots ``", paste(plotswhitoutCensus0, collapse=", "), "´´ do not have census0 data!!!"))
 }
 
-for (iplot in 1:length(names(dataForests$censuses$census0))) {
-	plotname <- names(dataForests$censuses$census0)[iplot]
-	spsCensus0 <- dataForests$censuses$census0[[which(names(dataForests$censuses$census0)==plotname)]]$code
-	spsTaxonomy <- unique(dataForests$taxonomy[[which(names(dataForests$taxonomy)==plotname)]]$code)
-	if(all(spsCensus0 %in% spsTaxonomy)){
-		message(paste0("All species in ``", plotname, "´´ census0 are reported in taxonomy of ``", plotname, "´´"))
-	} else {
-		spswithoutTaxonomy <- unique(spsCensus0[which(spsCensus0 %in% spsTaxonomy)==FALSE])
-		stop(paste0("Species ``", paste(spswithoutTaxonomy, collapse=", "), "´´are not reported in taxonomy data of ``", plotname, "´´"))
-	}
-}
+# for (iplot in 1:length(names(dataForests$censuses$census0))) {
+# 	plotname <- names(dataForests$censuses$census0)[iplot]
+# 	spsCensus0 <- dataForests$censuses$census0[[which(names(dataForests$censuses$census0)==plotname)]]$code
+# 	if(!plotname%in%plotswhitoutTaxonomy){
+# 	spsTaxonomy <- unique(dataForests$taxonomy[[which(names(dataForests$taxonomy)==plotname)]]$code)
+# 	}else{spsTaxonomy<-NULL}
+# 	if(all(spsCensus0 %in% spsTaxonomy)){
+# 		message(paste0("All species in ``", plotname, "´´ census0 are reported in taxonomy of ``", plotname, "´´"))
+# 	} else {
+# 		spswithoutTaxonomy <- unique(spsCensus0[which(spsCensus0 %in% spsTaxonomy)==FALSE])
+# 		stop(paste0("Species ``", paste(spswithoutTaxonomy, collapse=", "), "´´are not reported in taxonomy data of ``", plotname, "´´"))
+# 	}
+# }
 
 ######################################## DO NOT RUN #######################################
 #saveRDS(dataForests, "~/Dropbox/ForestsRDS/dataForests.rds")
