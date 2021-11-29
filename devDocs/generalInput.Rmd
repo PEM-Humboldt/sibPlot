@@ -135,12 +135,47 @@ Input format will require extra tables in order to manage their characteristics:
 
 1. spec.in_requi (specifications concerning the requirement of an input format in terms of R-packages etc.)
 1. spec.in_format will recense all the different input formats and their versions
-1. spec.rel a relationship table to tie the different specifications with the different rules
+1. spec.in_rel_tab a relationship table to tie the different specifications with the different rules
+
+## Creating the specification tables
+
+
+```{r}
+require(RPostgreSQL)
+sib_adm <- dbConnect(PostgreSQL(),dbname = "sib_plot",user = "sib_adm",password="sib")
+dbSendStatement(sib_adm,"DROP SCHEMA spec CASCADE")
+sqlCreateSpec <- paste(readLines("../notR/sql_database/createInputSpecTables.sql"),collapse = "\n")
+dbSendStatement(sib_adm,sqlCreateSpec)
+```
+
+## Representing the input specification tables
+
+```{r, fig.show='hide', message=FALSE, warning=FALSE}
+source("../functions/export_svg.R")
+require(dm)
+dm_object <- dm_from_src(sib_adm,schema = "spec")
+dm_object <- dm_object[names(dm_object)[grepl("^in_", names(dm_object)) | grepl("def_", names(dm_object))]]
+A <- dm_draw(dm_object, view_type = "all")
+B<- save_png(A,"../../Fig/graph_database_spec.png")
+```
+
+```{r}
+img <- png::readPNG(B)
+grid::grid.raster(img)
+```
+
+## Functions for managing input specifications
+
+### Exporting an input specification
+
+### Representing an input specification
+
+### Creating or modifying input specifications
 
 
 
-
-
-
+```{r}
+dbDisconnect(sib_adm)
+```
 
 

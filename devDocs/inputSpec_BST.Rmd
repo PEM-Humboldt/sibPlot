@@ -1,5 +1,5 @@
 ---
-title: "Input specification creation and management for the data from the Dry Forest plots from Colombia"
+title: "Input specification creation and management for the data from the Dry Forest plots from Colombia (red BST-COL)."
 author: "Marius Bottin"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
 output: 
