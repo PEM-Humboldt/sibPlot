@@ -6,8 +6,9 @@ CREATE TABLE spec.in_tables
   tablename text NOT NULL,
   mandatory boolean DEFAULT false,
   regex_reco text,
-  extra boolean,
-  comment text
+  extra boolean DEFAULT false,
+  comment text,
+  UNIQUE(tablename,mandatory,regex_reco)
 );
 
 
@@ -23,11 +24,12 @@ CREATE TABLE spec.def_typeof
 CREATE TABLE spec.in_fields
 (
   id_field serial PRIMARY KEY,
-  cd_tab INTEGER REFERENCES spec.in_tables(id_tab),
-  fieldname text,
+  cd_tab INTEGER REFERENCES spec.in_tables(id_tab) NOT NULL,
+  fieldname text NOT NULL,
   example text,
   regex_reco text,
-  typeof varchar REFERENCES spec.def_typeof(id_to),
+  typeof varchar REFERENCES spec.def_typeof(id_to) NOT NULL,
+  unit varchar(10),
   max_char integer,
   min_num double precision,
   max_num double precision,
@@ -37,7 +39,8 @@ CREATE TABLE spec.in_fields
   ref_table integer REFERENCES spec.in_tables(id_tab),
   ref_field integer REFERENCES spec.in_fields(id_field),
   comment text,
-  CHECK (fieldname !~ ';' AND fieldname !~ '--')
+  CHECK (fieldname !~ ';' AND fieldname !~ '--'),
+  CHECK (NOT (typeof = 'varchar' AND max_char IS NULL))
 );
 
 CREATE TABLE spec.def_rule
@@ -63,6 +66,10 @@ CREATE TABLE spec.in_format
   id_for serial PRIMARY KEY,
   formatname text,
   version varchar(10),
+  created_by text,
+  creation_date TIMESTAMP,
+  install_date TIMESTAMP,
+  description text,
   CHECK (version ~ '[0-9]{1,3}\.[0-9]{1,3}'),
   UNIQUE (formatname,version)
 );
@@ -78,7 +85,7 @@ CREATE TABLE spec.in_requi
 (
   cd_for integer REFERENCES spec.in_format(id_for),
   cd_tr varchar(50) REFERENCES spec.def_type_requi(id_tr),
-  requisite text
+  requirement text
 );
 
 CREATE TABLE spec.in_rel_tab
@@ -96,7 +103,7 @@ CREATE TABLE spec.in_rel_field
 CREATE TABLE spec.in_rel_rule
 (
   cd_for integer REFERENCES spec.in_format(id_for),
-  cd_field integer REFERENCES spec.in_rule(id_rule)
+  cd_rule integer REFERENCES spec.in_rule(id_rule)
 );
 
 

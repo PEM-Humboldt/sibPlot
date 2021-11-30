@@ -131,5 +131,71 @@ readCsvFiles<-function(files,categ)
 }
 ##########END#################
 
+maxVersion <- function(versions)
+{
+  if(length(versions)==1){return(versions)}
+  spl <- lapply(strsplit(versions,"\\."),as.integer)
+  max_lev <- max(sapply(spl,length))
+  tabVersion <- as.data.frame(Reduce(rbind,lapply(spl, function(x,ml) c(x, rep(0,ml - length(x))),ml = max_lev)))
+  ORD <- do.call(order, tabVersion)
+  return(versions[which.max(ORD)])
+}
+
+listInputFormat <- function(conn_adm)
+{
+  dbGetQuery(conn_adm,"SELECT * FROM spec.in_format")
+}
+
+getInputSpec <- function(conn_adm, formatName, formatVersion = "last")
+{
+  formats <- dbGetQuery(conn_adm,
+    "SELECT *
+    FROM spec.in_format
+    WHERE formatname=$1",
+  params=list(formatName))
+  stopifnot(formatName %in% formats$formatname)
+  if(formatVersion == "last")
+  {formatVersion <- maxVersion(formats$version)}
+  res <- list()
+  res$format <- dbGetQuery(conn_adm,
+      "SELECT *
+      FROM spec.in_format
+      WHERE formatname=$1 AND version=$2
+      ",params=list(formatName,formatVersion))
+  res$tables <- dbGetQuery(conn_adm,
+      "SELECT tb.*
+      FROM spec.in_format fo
+        JOIN spec.in_rel_tab irt ON fo.id_for=irt.cd_for
+        JOIN spec.in_tables tb ON irt.cd_tab=tb.id_tab
+      WHERE formatname=$1 AND version=$2",
+      params = list(formatName, formatVersion))
+  res$fields <- dbGetQuery(conn_adm,
+      "SELECT fi.id_field, fi.cd_tab, tb.tablename, fi.example, fi.regex_reco, fi.typeof, fi.unit, fi.max_char, fi.min_num, fi.max_num, fi.mandatory, fi.extra, fi.regex_field, fi.ref_table, fi.ref_field, fi.comment
+      FROM spec.in_format fo
+        JOIN spec.in_rel_field irt ON fo.id_for=irt.cd_for
+        JOIN spec.in_fields fi ON irt.cd_field=fi.id_field
+        JOIN spec.in_tables tb ON fi.cd_tab=tb.id_tab
+      WHERE formatname=$1 AND version=$2",
+      params = list(formatName, formatVersion))
+  res$rules <- dbGetQuery(conn_adm,
+      "SELECT ru.id_rule, ru.type_rule, ru.cd_tab, tb.tablename, ru.rule, ru.comment
+      FROM spec.in_format fo
+        JOIN spec.in_rel_rule irl ON fo.id_for=irl.cd_for
+        JOIN spec.in_rule ru ON irl.cd_rule=ru.id_rule
+        JOIN spec.in_tables tb ON ru.cd_tab=tb.id_tab
+      WHERE formatname=$1 AND version=$2",
+      params = list(formatName, formatVersion))
+  res$requirements <- dbGetQuery(conn_adm,
+      "SELECT cd_tr, requirement
+      FROM spec.in_format fo
+        JOIN spec.in_requi re ON fo.id_for=re.cd_for
+      WHERE formatname=$1 AND version=$2",
+      params = list(formatName, formatVersion))
+  return(res)
+}
+conn_adm <- sib_adm
+formatName <- listInputFormat(conn_adm)[1,"formatname"]
+formatVersion <- "last"
+getInputSpec(sib_adm,formatName)
 
 
