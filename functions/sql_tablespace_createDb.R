@@ -17,7 +17,7 @@ sib_create_tablespace<- function(adm_con,nameTableSpace,path){
 }
 
 
-sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", nameTableSpace=NA, template= "template0")
+sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", nameTableSpace=NA, template= "template0", lc_ctype = "en_US.UTF-8", lc_collate = 'en_US.UTF-8')
 {
   if(!dbHasCreateDb(adm_con)){
     stop("You need the 'CREATEDB' attribute to do that")
@@ -29,7 +29,9 @@ sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", na
   }
   if(grepl(";",nameTableSpace)|grepl("--",nameTableSpace)|
      grepl(";",nameDb)|grepl("--",nameDb)|
-     grepl(";",template)|grepl("--",template)
+     grepl(";",template)|grepl("--",template)|
+     grepl(";",lc_ctype)|grepl("--",lc_ctype)|
+     grepl(";",lc_collate)|grepl("--",lc_collate)
      )
   {
     stop("SQL injection attack... Why are you doing that?")
@@ -49,7 +51,9 @@ sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", na
                "OWNER",owner,
                ifelse(is.na(encoding),"",paste("ENCODING",dbQuoteString(adm_con,encoding))),
                ifelse(is.na(nameTableSpace),"",paste("TABLESPACE",nameTableSpace)),
-               ifelse(is.na(template),"",paste("TEMPLATE",template))
+               ifelse(is.na(template),"",paste("TEMPLATE",template)),
+               ifelse(is.na(lc_ctype),"",paste("LC_CTYPE",dbQuoteString(adm_con,lc_ctype))),
+               ifelse(is.na(lc_collate),"",paste("LC_COLLATE",dbQuoteString(adm_con,lc_collate)))
   )
   #return(que)
   return(dbSendStatement(adm_con,que))

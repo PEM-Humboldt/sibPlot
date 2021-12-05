@@ -130,7 +130,7 @@ source("../functions/createSqlRole.R",echo = T,max.deparse.length = Inf,prompt.e
 
 
 ```{r}
-create_sib_role(sib_adm, rolName = "sib", createDb = T)
+create_sib_role(sib_adm, rolName = "sib", inGroup = NA)
 create_sib_role(sib_adm, rolName="sib_user",passwd="pw",inGroup = 'sib')
 ```
 
@@ -161,7 +161,10 @@ source(file= "../functions/sql_tablespace_createDb.R",echo = T,max.deparse.lengt
 ```
 
 ```{r}
-sib_create_tablespace(con_postgres, "sib_plot", "/mnt/rapiddb/sib_plot")
+source("../functions/infoUserConnection.R")
+if(Sys.info()["nodename"]=="debianport")
+{sib_create_tablespace(con_postgres,"sib_plot","/home/dbTableSpace/sib_plot/")}else
+{sib_create_tablespace(con_postgres, "sib_plot", "/mnt/rapiddb/sib_plot")}
 dbSendStatement(con_postgres,"GRANT ALL ON TABLESPACE sib_plot TO sib_adm")
 ```
 
@@ -197,7 +200,7 @@ dbDisconnect(sib_lite)
 
 # Extensions
 
-## PostgreSQL`
+## PostgreSQL
 
 ```{r}
 con_postgres<- dbConnect(dbDriver("PostgreSQL"),dbname="sib_plot",user="postgres")

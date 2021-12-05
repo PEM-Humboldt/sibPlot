@@ -35,6 +35,8 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 opts_chunk$set(cache=F,fig.path="../../Fig/generalInput",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize',
                echo=T, message=T, warning=T)
 options(knitr.kable.NA = '---')
+source("../functions/extract_function.R")
+readLines("../functions/extract_function.R")
 ```
 
 
@@ -130,6 +132,7 @@ Input specifications will be kept in the following table:
 1. spec.in_tables (specifications concerning the tables, their mandatory characteristics, and the regex concerning their names)
 1. spec.in_field (specifications concerning the column of the tables)
 1. spec.in_rules (specifications the extra rules to be enforced in the field and tables)
+1. spec.in_function stores the R-functions which may be used for applying the different steps of data input 
 
 Input format will require extra tables in order to manage their characteristics:
 
@@ -140,23 +143,21 @@ Input format will require extra tables in order to manage their characteristics:
 ## Creating the specification tables
 
 
-```{r}
-require(RPostgreSQL)
-sib_adm <- dbConnect(PostgreSQL(),dbname = "sib_plot",user = "sib_adm",password="sib")
-dbSendStatement(sib_adm,"DROP SCHEMA spec CASCADE")
-sqlCreateSpec <- paste(readLines("../notR/sql_database/createInputSpecTables.sql"),collapse = "\n")
-dbSendStatement(sib_adm,sqlCreateSpec)
+```r
+source("../scripts/mariusTmp/reinitializeSpecSchema.r")
 ```
 
 ## Representing the input specification tables
 
 ```{r, fig.show='hide', message=FALSE, warning=FALSE}
+sib_adm <- dbConnect(PostgreSQL(),dbname = "sib_plot",user = "sib_adm",password = "sib")
 source("../functions/export_svg.R")
 require(dm)
 dm_object <- dm_from_src(sib_adm,schema = "spec")
 dm_object <- dm_object[names(dm_object)[grepl("^in_", names(dm_object)) | grepl("def_", names(dm_object))]]
 A <- dm_draw(dm_object, view_type = "all")
 B<- save_png(A,"../../Fig/graph_database_spec.png")
+dbDisconnect(sib_adm)
 ```
 
 ```{r}
@@ -166,13 +167,112 @@ grid::grid.raster(img)
 
 ## Functions for managing input specifications
 
+*Note: the specification schema in the database is owned by the administrator, therefore all the functions here take at least an admin connection as argument*
+
 ### Exporting an input specification
 
-### Representing an input specification
+#### List input specifications
+
+   
+   
+A simple wrapper function allows us to list the input formats:
+
+```{r, code=extractFunction("../functions/specs.R","listInputFormats")}
+eval(parse(text=extractFunction("../functions/specs.R","listInputFormats")))
+```
+
+For example:
+```{r}
+sib_adm <- dbConnect(PostgreSQL(), dbname = "sib_plot", user = "sib_adm", password = "sib")
+A <- listInputFormats(sib_adm)
+kable(A, booktab = T)
+dbDisconnect(sib_adm)
+```
+
+
+
+#### getting specification
+
+  
+
+A function allows us to export an input specification in a R list.
+
+```{r, code=extractFunction("../functions/specs.R","getInputSpec")}
+eval(parse(text=extractFunction("../functions/specs.R","getInputSpec")))
+```
+
+In order to make it work, we need to have a function which look for the last version in a list of version:
+```{r code=extractFunction("../functions/specs.R","maxVersion") }
+eval(parse(text=extractFunction("../functions/specs.R","maxVersion")))
+```
+
+It may be used like it:
+```{r}
+maxVersion(c("0.1","12.3","5.2.5"))
+```
+
+The function *getInputSpec* takes as arguments:
+
+1. *conn_adm* : a connection to the database as administrator
+1. *formatName*: the name of a format
+1. *formatVersion*: the format version as a character string, or the word "last" in order to find the last version of the format
+
+
 
 ### Creating or modifying input specifications
 
+#### Version indentation
+The following functions allows us to indent version numbers:
 
+```{r code=extractFunction("../functions/specs.R","indentVersion") }
+eval(parse(text = extractFunction("../functions/specs.R","indentVersion")))
+```
+
+```{r}
+indentVersion("2.1","minor")
+indentVersion("3.4","major")
+```
+
+It will be useful for R to determine the new versions of input formats as we modify them.
+
+#### Preparing Excel file for creating new formats
+
+The following function prepare an Excel file which may be used to create a new format specification in the database.
+
+```{r code=extractFunction("../functions/specs.R","prepareInputFormat") }
+eval(parse(text = extractFunction("../functions/specs.R","prepareInputFormat")))
+```
+
+Then the users may modify the Excel, or the csv files for creating a new input format, which will be read by the function presented in the next paragraph.
+Lines may be deleted, modified or added.
+Note that modified lines should be shown by using a code for the line of type "m1,m2,...,mn" and that added lines should be noted "n1,n2,...,nn".
+
+```r
+prepareInputFormat(sib_adm, "BST_csv", author = "marius", "mi", dirName="../inputSpec/Bst_csv/", typeFile = "csv")
+```
+
+```{r code=extractFunction("../functions/sql_utilities.R","sqlizeNames") }
+eval(parse(text = extractFunction("../functions/sql_utilities.R","sqlizeNames")))
+```
+
+
+```r
+A <- read.csv("../inputSpec/Bst_csv/BST_csv_0.2_fields.csv")
+A$regex_reco <- paste(paste0("^",A$fieldname,"$"),paste0("^",sqlizeNames(A$fieldname),"$"),sep=";")
+A$fieldname <- sqlizeNames(A$fieldname)
+write.csv(A,file = "../inputSpec/Bst_csv/BST_csv_0.2_fields.csv")
+```
+
+#### Submitting a new input specification
+The following function takes as arguments files such as created in the prepareInputFormat function and create the input format specification in the database.
+
+### Representing an input specification
+
+
+
+**************************
+
+**Going out!**
 
 ```{r}
 dbDisconnect(sib_adm)

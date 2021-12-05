@@ -131,6 +131,14 @@ readCsvFiles<-function(files,categ)
 }
 ##########END#################
 
+
+listInputFormats <- function(conn_adm)
+{
+  dbGetQuery(conn_adm,"SELECT * FROM spec.in_format")
+}
+##############END#############
+
+
 maxVersion <- function(versions)
 {
   if(length(versions)==1){return(versions)}
@@ -140,11 +148,7 @@ maxVersion <- function(versions)
   ORD <- do.call(order, tabVersion)
   return(versions[which.max(ORD)])
 }
-
-listInputFormat <- function(conn_adm)
-{
-  dbGetQuery(conn_adm,"SELECT * FROM spec.in_format")
-}
+##########END#############
 
 getInputSpec <- function(conn_adm, formatName, formatVersion = "last")
 {
@@ -170,12 +174,14 @@ getInputSpec <- function(conn_adm, formatName, formatVersion = "last")
       WHERE formatname=$1 AND version=$2",
       params = list(formatName, formatVersion))
   res$fields <- dbGetQuery(conn_adm,
-      "SELECT fi.id_field, fi.cd_tab, tb.tablename, fi.example, fi.regex_reco, fi.typeof, fi.unit, fi.max_char, fi.min_num, fi.max_num, fi.mandatory, fi.extra, fi.regex_field, fi.ref_table, fi.ref_field, fi.comment
+      "SELECT fi.id_field, fi.cd_tab, tb.tablename, fi.fieldname, fi.example, fi.regex_reco, fi.typeof, fi.unit, fi.max_char, fi.min_num, fi.max_num, fi.mandatory, fi.extra, fi.regex_field, fi.ref_table, fi.ref_field, fi.lev_ref, fi.comment
       FROM spec.in_format fo
         JOIN spec.in_rel_field irt ON fo.id_for=irt.cd_for
         JOIN spec.in_fields fi ON irt.cd_field=fi.id_field
         JOIN spec.in_tables tb ON fi.cd_tab=tb.id_tab
-      WHERE formatname=$1 AND version=$2",
+      WHERE formatname=$1 AND version=$2
+      ORDER BY fi.cd_tab, fi.ordercol
+      ",
       params = list(formatName, formatVersion))
   res$rules <- dbGetQuery(conn_adm,
       "SELECT ru.id_rule, ru.type_rule, ru.cd_tab, tb.tablename, ru.rule, ru.comment
@@ -191,11 +197,114 @@ getInputSpec <- function(conn_adm, formatName, formatVersion = "last")
         JOIN spec.in_requi re ON fo.id_for=re.cd_for
       WHERE formatname=$1 AND version=$2",
       params = list(formatName, formatVersion))
+  res$functions <- dbGetQuery(conn_adm,
+      "SELECT if.*
+      FROM spec.in_format fo
+        JOIN spec.in_rel_func irf ON fo.id_for=irf.cd_for
+        JOIN spec.in_functions if ON irf.cd_func=if.id_func
+      WHERE formatname=$1 AND version=$2",
+      params = list(formatName, formatVersion))
   return(res)
 }
-conn_adm <- sib_adm
-formatName <- listInputFormat(conn_adm)[1,"formatname"]
-formatVersion <- "last"
-getInputSpec(sib_adm,formatName)
+############END############
+
+indentVersion <- function(version,typeUpdate = c("minor","major"))
+{
+  stopifnot(length(version)==1)
+  typeUpdate <- match.arg(typeUpdate)
+  sep_ver <- as.integer(strsplit(version,"\\.")[[1]])
+  if (typeUpdate == "major")
+  {
+    sep_ver[1] <- sep_ver[1] + 1
+    sep_ver[2:length(sep_ver)] <- 0
+  }
+  if (typeUpdate == "minor")
+  {
+    sep_ver[length(sep_ver)] <- sep_ver[length(sep_ver)] + 1
+  }
+  return(paste(sep_ver,collapse = "."))
+}
+############END############
+
+
+prepareInputFormat <- function(conn_adm, formatName, author = NA, typeUpdate = c("minor", "major", "new"), fromFormat = ifelse(typeUpdate %in% c("minor","major"), formatName, NA), fromVersion = "last", dirName = "./sibPlot_inputFormats/", typeFile=c("xlsx","csv"), newVersion = NA)
+{
+  # argument management
+  typeUpdate <- match.arg(typeUpdate)
+  if(is.na(fromFormat))
+  {stop("Please indicate the format you want to use as a model (argument *fromFormat*)")}
+  if(fromVersion == "last")
+  {
+    fromVersion <- maxVersion(dbGetQuery(conn_adm, "SELECT * FROM spec.in_format WHERE formatname=$1", params=list(fromFormat))$version)
+  }
+  typeFile <- match.arg(typeFile)
+  if (!dir.exists(dirName))
+  {dir.create(dirName)}
+  # extracting model
+  res <- getInputSpec(conn_adm, fromFormat, fromVersion)
+  # extracting format 
+  if (typeUpdate %in% c("minor","major") & is.na(newVersion))
+  {formatVersion <- indentVersion(fromVersion,typeUpdate)}
+  if (typeUpdate == "new")
+  {formatVersion <- "1.0"}
+  res$format <- data.frame(formatname = formatName,version = formatVersion, createdBy = author, description = res$format$description)
+  #TODO: make an explanation sheet for excel, or an explanation textFile for csv or... send a link to a document from gitHub which explains how to do
+  
+  # writing files
+  message("Escribiendo archivos...")
+  if(typeFile == "xlsx")
+  {
+    wb <- openxlsx::createWorkbook()
+    for(i in 1:length(res))
+    {
+      openxlsx::addWorksheet(wb,sheetName = names(res)[i])
+      openxlsx::writeData(wb, sheet = names(res)[i],
+                               x = res[[i]],
+                               keepNA = F,
+                               withFilter = F
+                               )
+      openxlsx::setColWidths(wb, names(res)[i], cols = 1:ncol(res[[i]]), widths = "auto")
+      #TODO: Here we could add styles to help the users understand what they should do with the excel file
+    }
+    fileName <- paste(dirName,paste0(formatName,"_",formatVersion,".xlsx"),sep="/")
+    openxlsx::saveWorkbook(wb, file = fileName, overwrite = F)
+    message("done!")
+    return(list(dir = dirName, wb=wb, res = res))
+  }else if (typeFile == "csv")
+  {
+    for (i in 1:length(res))
+    {
+      fileName <- paste(dirName,paste0(formatName,"_",formatVersion, "_", names(res)[i],".csv"),sep="/")
+      if (file.exists(fileName)) {stop("File",filename,"already exists!")}
+      write.csv(res[[i]],file = fileName, row.names = F,quote = T)
+    }
+    message("done!")
+    return(list(dirName,res = res))
+  }
+  
+}
+############END############
+
+removeInputSpec <- function(conn_adm, formatName, formatVersion="last", removeAll = F)
+{
+  if(formatVersion=="last")
+  {
+    formatVersion <- maxVersion(dbGetQuery(conn_adm,"SELECT version FROM spec.in_format WHERE formatname=$1",params = list(formatName))$version) 
+  }
+  res <- dbSendQuery(conn_adm,
+              "DELETE FROM spec.in_format
+              WHERE formatname=$1 AND version=$2",params=list(formatName,formatVersion))
+  affected <- dbGetRowsAffected(res)
+  dbClearResult(res)
+  return(affected)
+}
+#############END############
+
+getGarbageSpecInput <- function(conn_adm, returnedConcerned = T, clean = F, elements = c("tables","fields","rules","functions"))
+{
+  # The idea here is to have a function which look for the un-referenced (by formats) tables, fields, rules, functions in the input specification. If the clean option is True, then it removes them
+}
+
+
 
 
