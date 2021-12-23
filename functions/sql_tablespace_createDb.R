@@ -22,7 +22,7 @@ sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", na
   if(!dbHasCreateDb(adm_con)){
     stop("You need the 'CREATEDB' attribute to do that")
   }
-  if(nameDb%in%dbGetQuery(adm_con, "SELECT datname FROM pg_catalog.pg_database")$datname)
+  if(nameDb %in% dbGetQuery(adm_con, "SELECT datname FROM pg_catalog.pg_database")$datname)
   {
     warning(nameDb," exists already! Bloqued before going to postgres")
     return(NULL)
@@ -39,7 +39,7 @@ sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", na
   if(!is.na(nameTableSpace))
   {
     rightsTableSpace<-dbGetQuery(adm_con,"SELECT spcname, spcacl FROM pg_catalog.pg_tablespace")
-    rightsInt<- rightsTableSpace[rightsTableSpace$spcname==nameTableSpace,"spcacl"]
+    rightsInt<- rightsTableSpace[rightsTableSpace$spcname == nameTableSpace,"spcacl"]
     rightsInt<- gsub("[{}]","",rightsInt)
     sep<- strsplit(rightsInt,",")[[1]]
     usersAuth<- sub("^(.+)=.+$","\\1",sep)

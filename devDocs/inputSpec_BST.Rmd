@@ -38,7 +38,10 @@ options(knitr.kable.NA = '---')
 ```
 
 
+**Note** there are structural deficiencies in this format. Indeed it is very dificult to find some real functional foreign keys since there is a difference between census0 and recruitment.
 
+I have developped the functions for managing the formats taking this format into account.
+Check file [specs.R](../functions/specs.R).
 
 
 ```{r}

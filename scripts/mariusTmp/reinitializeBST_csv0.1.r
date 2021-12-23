@@ -11,7 +11,6 @@ for(i in 1:nrow(A[[1]]))
 {
   counter <- max(A[[1]]$ordercol[A[[1]]$table==A[[1]][i,"table"]])+1
   A[[1]][i,"ordercol"] <- counter
-  
 }
 
 require(RPostgreSQL)

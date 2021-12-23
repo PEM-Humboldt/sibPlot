@@ -245,8 +245,8 @@ eval(parse(text = extractFunction("../functions/specs.R","prepareInputFormat")))
 
 Then the users may modify the Excel, or the csv files for creating a new input format, which will be read by the function presented in the next paragraph.
 Lines may be deleted, modified or added.
-Note that modified lines should be shown by using a code for the line of type "m1,m2,...,mn" and that added lines should be noted "n1,n2,...,nn".
-
+<!-- Note that modified lines should be shown by using a code for the line of type "m1,m2,...,mn" and that added lines should be noted "n1,n2,...,nn".
+-->
 ```r
 prepareInputFormat(sib_adm, "BST_csv", author = "marius", "mi", dirName="../inputSpec/Bst_csv/", typeFile = "csv")
 ```
@@ -265,6 +265,24 @@ write.csv(A,file = "../inputSpec/Bst_csv/BST_csv_0.2_fields.csv")
 
 #### Submitting a new input specification
 The following function takes as arguments files such as created in the prepareInputFormat function and create the input format specification in the database.
+
+The most important difficulty is that all modified lines in the tables will be given a new code in the specifications, so I might have a bad time to find the new and old lines and how to change them, particularly their references in the rules and references.
+I am not sure whether we should put anything in the files (cd_tab and cd_fields ; type n1 for new cd 1) or whether it would make more sense let the R and SQL codes make automatically sense of it.
+It is important as well make the verifications of a model, and maybe give the possibility to represent and analyse the files before putting them in the database (well I am not sure actually)
+
+
+<!-- TODO : in BST_csv there are very specific rules to make for the table recruitment, which should actually be the opposite of a foreign key: it should not exist yet
+I also realized that the function which manage the process of adding some censusn should have a step which is downloading all the data for the plot in the database, but not including the census0 and taxonomy in the input, except if there are some modifications to make.
+-->
+
+```{r}
+vecChar <- spec$fields$fieldname
+regex_spec <- strsplit(spec$fields$regex_reco,";")
+names(regex_spec)<- spec$fields$fieldname
+```
+
+
+
 
 ### Representing an input specification
 

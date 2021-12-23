@@ -8,7 +8,7 @@ CREATE TABLE spec.in_tables
   regex_reco text,
   extra boolean DEFAULT false,
   comment text,
-  UNIQUE(tablename,mandatory,regex_reco)
+  UNIQUE(tablename, mandatory, regex_reco, extra)
 );
 
 
@@ -41,6 +41,7 @@ CREATE TABLE spec.in_fields
   max_char integer,
   min_num double precision,
   max_num double precision,
+  "unique" boolean DEFAULT false NOT NULL,
   mandatory boolean DEFAULT false NOT NULL,
   extra boolean DEFAULT false NOT NULL,
   lev_ref varchar(50) REFERENCES spec.def_lev_ref(id_lev_ref),
@@ -50,26 +51,27 @@ CREATE TABLE spec.in_fields
   comment text,
   CHECK (fieldname !~ ';' AND fieldname !~ '--'),
   CHECK (NOT (typeof = 'varchar' AND max_char IS NULL)),
-  UNIQUE(cd_tab, fieldname, regex_reco, typeof, unit, max_char, min_num, max_num, mandatory, extra, regex_field, ref_table, ref_field),
-  UNIQUE(cd_tab,ordercol)
+  UNIQUE(cd_tab, fieldname, regex_reco, typeof, unit, max_char, min_num, max_num, "unique", mandatory, extra, lev_ref, regex_field, ref_table, ref_field)
 );
 
 CREATE TABLE spec.def_rule
 (
-  id_typerule varchar(50) PRIMARY KEY,
-  description_typerule text
+  typerule varchar(50) PRIMARY KEY,
+  description_typerule text,
+  in_implemented boolean,
+  store_implemented boolean
 );
 
 
 CREATE TABLE spec.in_rule
 (
   id_rule serial PRIMARY KEY,
-  type_rule varchar(50) REFERENCES spec.def_rule(id_typerule),
-  cd_tab integer REFERENCES spec.in_tables(id_tab),
-  rule text,
+  typerule varchar(50) REFERENCES spec.def_rule(typerule) NOT NULL,
+  cd_tab integer REFERENCES spec.in_tables(id_tab) NOT NULL,
+  rule text NOT NULL,
   comment text,
   CHECK (rule !~ ';' AND rule !~ '--' ),
-  UNIQUE (type_rule, cd_tab, rule, comment)
+  UNIQUE (typerule, cd_tab, rule)
 );
 
 CREATE TABLE spec.def_in_steps
@@ -81,10 +83,13 @@ CREATE TABLE spec.def_in_steps
 CREATE TABLE spec.in_functions
 (
   id_func serial PRIMARY KEY,
-  cd_step varchar(50) REFERENCES spec.def_in_steps(id_step),
-  function_r varchar(250),
+  cd_step varchar(50) REFERENCES spec.def_in_steps(id_step) NOT NULL,
+  function_r varchar(250) NOT NULL,
   args text,
-  variable_res varchar(250)
+  variable_res varchar(250),
+  comment text,
+  UNIQUE(cd_step, function_r, args, variable_res)
+  
 );
 
 CREATE TABLE spec.in_format
@@ -117,25 +122,29 @@ CREATE TABLE spec.in_requi
 CREATE TABLE spec.in_rel_tab
 (
   cd_for integer REFERENCES spec.in_format(id_for) ON DELETE CASCADE ON UPDATE CASCADE,
-  cd_tab integer REFERENCES spec.in_tables(id_tab) ON DELETE CASCADE ON UPDATE CASCADE
+  cd_tab integer REFERENCES spec.in_tables(id_tab) ON DELETE CASCADE ON UPDATE CASCADE,
+  PRIMARY KEY (cd_for, cd_tab)
 );
 
 CREATE TABLE spec.in_rel_field
 (
   cd_for integer REFERENCES spec.in_format(id_for) ON DELETE CASCADE ON UPDATE CASCADE,
-  cd_field integer REFERENCES spec.in_fields(id_field) ON DELETE CASCADE ON UPDATE CASCADE
+  cd_field integer REFERENCES spec.in_fields(id_field) ON DELETE CASCADE ON UPDATE CASCADE,
+  PRIMARY KEY(cd_for, cd_field)
 );
 
 CREATE TABLE spec.in_rel_rule
 (
   cd_for integer REFERENCES spec.in_format(id_for) ON DELETE CASCADE ON UPDATE CASCADE,
-  cd_rule integer REFERENCES spec.in_rule(id_rule) ON DELETE CASCADE ON UPDATE CASCADE
+  cd_rule integer REFERENCES spec.in_rule(id_rule) ON DELETE CASCADE ON UPDATE CASCADE,
+  PRIMARY KEY (cd_for, cd_rule)
 );
 
 CREATE TABLE spec.in_rel_func
 (
   cd_for integer REFERENCES spec.in_format(id_for) ON DELETE CASCADE ON UPDATE CASCADE,
-  cd_func integer REFERENCES spec.in_functions(id_func) ON DELETE CASCADE ON UPDATE CASCADE
+  cd_func integer REFERENCES spec.in_functions(id_func) ON DELETE CASCADE ON UPDATE CASCADE,
+  PRIMARY KEY (cd_for, cd_func)
 );
 
 INSERT INTO spec.def_typeof VALUES
@@ -149,10 +158,11 @@ INSERT INTO spec.def_typeof VALUES
 ;
 
 INSERT INTO spec.def_rule VALUES
-('UNIQUE','unique rule applied on more than one column'),
-('CHECK','boolean which need to be true in order to be accepted in the data table'),
-('ALL_IDENTICAL','expression which forces all values to be identical depending on another value example: "field1 IN field2, field3" note that field may be identified by their cd_field (recommended)'),
-('FOREIGN_MULTI','Multiple foreign key, the association of value must exist in the referenced table example "tab1(field1,field2) REFERENCES tab2(field3,field4)" note that fields and tables must be identified by their cd_field and cd_tab')
+('UNIQUE','unique rule applied on more than one column',true,true),
+('CHECK','boolean which need to be true in order to be accepted in the data table',false,true),
+('ALL IDENTICAL','expression which forces all values to be identical depending on another value example: "field1 IN field2, field3"',true, false),
+('FOREIGN MULTI','Multiple foreign key, the association of value must exist in the referenced table example "tab1(field1,field2) REFERENCES tab2(field3,field4)"',true,false),
+('NOT IN','Values from one column should not exists in another column, potentially in another table. Example: tab1(field1,field2) NOT IN tab2(field1,field2).',true,false)
 ;
 
 INSERT INTO spec.def_lev_ref VALUES

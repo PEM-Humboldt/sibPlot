@@ -47,3 +47,6 @@ devDocs/*.tex
 
 # R Environment Variables
 .Renviron
+
+# kate
+*.kate-swp
