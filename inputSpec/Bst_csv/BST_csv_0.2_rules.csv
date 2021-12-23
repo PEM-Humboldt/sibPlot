@@ -1,0 +1,7 @@
+"id_rule","typerule","cd_tab","tablename","rule","comment"
+1,"NOT IN",8,"recruitment","recruitment(tag) NOT IN census0(tag)","in table recruitment the new tag should not exist already in the database"
+2,"ALL IDENTICAL",9,"taxonomy","family IN taxo_code",
+3,"ALL IDENTICAL",9,"taxonomy","genus IN taxo_code",
+4,"ALL IDENTICAL",9,"taxonomy","specific_epithet IN taxo_code",
+5,"ALL IDENTICAL",9,"taxonomy","infraspecific_epithet IN taxo_code",
+6,"ALL IDENTICAL",9,"taxonomy","family IN genus",

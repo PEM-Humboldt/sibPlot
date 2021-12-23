@@ -17,19 +17,21 @@ sib_create_tablespace<- function(adm_con,nameTableSpace,path){
 }
 
 
-sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", nameTableSpace=NA, template= "template0")
+sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", nameTableSpace=NA, template= "template0", lc_ctype = "en_US.UTF-8", lc_collate = 'en_US.UTF-8')
 {
   if(!dbHasCreateDb(adm_con)){
     stop("You need the 'CREATEDB' attribute to do that")
   }
-  if(nameDb%in%dbGetQuery(adm_con, "SELECT datname FROM pg_catalog.pg_database")$datname)
+  if(nameDb %in% dbGetQuery(adm_con, "SELECT datname FROM pg_catalog.pg_database")$datname)
   {
     warning(nameDb," exists already! Bloqued before going to postgres")
     return(NULL)
   }
   if(grepl(";",nameTableSpace)|grepl("--",nameTableSpace)|
      grepl(";",nameDb)|grepl("--",nameDb)|
-     grepl(";",template)|grepl("--",template)
+     grepl(";",template)|grepl("--",template)|
+     grepl(";",lc_ctype)|grepl("--",lc_ctype)|
+     grepl(";",lc_collate)|grepl("--",lc_collate)
      )
   {
     stop("SQL injection attack... Why are you doing that?")
@@ -37,7 +39,7 @@ sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", na
   if(!is.na(nameTableSpace))
   {
     rightsTableSpace<-dbGetQuery(adm_con,"SELECT spcname, spcacl FROM pg_catalog.pg_tablespace")
-    rightsInt<- rightsTableSpace[rightsTableSpace$spcname==nameTableSpace,"spcacl"]
+    rightsInt<- rightsTableSpace[rightsTableSpace$spcname == nameTableSpace,"spcacl"]
     rightsInt<- gsub("[{}]","",rightsInt)
     sep<- strsplit(rightsInt,",")[[1]]
     usersAuth<- sub("^(.+)=.+$","\\1",sep)
@@ -49,7 +51,9 @@ sib_create_database<- function(adm_con, nameDb, owner="sib", encoding="UTF8", na
                "OWNER",owner,
                ifelse(is.na(encoding),"",paste("ENCODING",dbQuoteString(adm_con,encoding))),
                ifelse(is.na(nameTableSpace),"",paste("TABLESPACE",nameTableSpace)),
-               ifelse(is.na(template),"",paste("TEMPLATE",template))
+               ifelse(is.na(template),"",paste("TEMPLATE",template)),
+               ifelse(is.na(lc_ctype),"",paste("LC_CTYPE",dbQuoteString(adm_con,lc_ctype))),
+               ifelse(is.na(lc_collate),"",paste("LC_COLLATE",dbQuoteString(adm_con,lc_collate)))
   )
   #return(que)
   return(dbSendStatement(adm_con,que))

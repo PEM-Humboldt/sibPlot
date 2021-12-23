@@ -1,0 +1,11 @@
+tablename,regex_reco,mandatory,comment
+metadata,^metadata$,F,
+dates,^dates$,F,
+census0,^census0$,F,
+xy,^xy$,F,
+aliveStatus,^aliveStatus$,F,
+growth,^growth$;^(growth)([1-9][0-9]?)$,F,
+mortality,^mortality$;^(mortality)([1-9][0-9]?)$,F,
+recruitment,^recruitment$;^(recruitment)([1-9][0-9]?)$,F,
+taxonomy,^taxonomy$,F,
+members,^members$,F,

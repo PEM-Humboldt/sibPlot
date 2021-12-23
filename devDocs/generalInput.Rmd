@@ -1,0 +1,299 @@
+---
+title: "General principles for data input in the databases"
+author: "Marius Bottin"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+   pdf_document:
+     toc: true
+     toc_depth: 5
+     number_sections: true
+     latex_engine: xelatex
+always_allow_html: true
+fontsize: 11pt
+geometry: "left=3cm,right=3cm,top=3cm,bottom=3cm"
+linkcolor: gray
+urlcolor: blue
+citecolor: cyan
+header-includes:
+  - \usepackage{colortbl}
+  - \usepackage{xcolor}       
+  - \usepackage{lscape}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+--- 
+
+
+***************
+
+```{r, setup, message=F, warning=F, include=F}
+require(knitr)&require(RPostgreSQL)&require(formatR)&require(kableExtra)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+opts_chunk$set(cache=F,fig.path="../../Fig/generalInput",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize',
+               echo=T, message=T, warning=T)
+options(knitr.kable.NA = '---')
+source("../functions/extract_function.R")
+readLines("../functions/extract_function.R")
+```
+
+
+
+Data input in the databases in the main process of the package.
+This document will present the main principles of input processes in the package *sibPlot*
+
+In order to make it work for different types of data, we will try to make generic functions and processes for the most possible formats.
+These generic functions will be possible to create thanks to the creation of specifications, available to everybody under the form of a "specs" schema in the databases.
+
+Some of the processes will be specific to particular input formats, which means that the creation of new input formats will need a bit of R/SQL programming
+
+Here are the main steps in the process:
+
+1. Reading raw files
+1. Preformatting (if needed, this will be an optional step, only making sense for some of the formats)
+1. Determination of the tables and separations
+1. Separating the data as distincts *input_cd*
+1. Checking the integrity of the input data (through specifications given with the format)
+1. Determining the potential spec modifications due to new variables and/or new tables
+1. Comparing the data with the already existing data in order to understand the status of the input and the operation to be made
+1. Tranforming the input format of the  data into a database-compatible format
+1. integrating the new input in the database
+
+# Input step details
+
+## Reading raw files
+
+I believe that the best solution here is for the users to put all the files they want to add in the database in a directory (which might include subdirectories).
+From there, some generic functions may allow to read the different files depending on their extensions.
+
+## Preformatting
+
+**Preformatting is done thanks to specific functions, which may use specifications from the spec schema**
+
+Specific functions from various formats may allow some preformatting of the files before passing to the tests of data integrity.
+The goal here is to pass the data to the form of distinct square tables, which might not be the case for some of the raw formats.
+It might also be used to get some information that might be contained in particular non-tabular formats (e.g. styles, border of cells, colors from excel sheets)
+
+## Separation and recognition of tables
+
+Here the idea is to recognize the tables from the names of the files (or the sheets in case of excel).
+It is done thanks to generic functions using the specifications from the spec schema
+
+## Separation of the data as distinct *input_cd*
+
+It is essential to have functions which may separate the different *input_cd* from the data entered, because most of the data as stored in the user files do not include this separation.
+
+## Checking the integrity of the input data
+This is where we make the most extensive use of the specification tables, in order to:
+
+* Check for presence of all mandatory data (in terms of tables and columns)
+* Check for data types
+* Check for special rules on some fields (regex, maximum and minimum values)
+* Check on extra rules on the tables (type check sql rules)
+* Check on relationships between tables and fields (type foreign key rules)
+
+## Determining the potential spec modifications
+*sibPlot* has as an objective not to become a new constraint on how you manage your data and which variables you may or not enter in the database.
+This is a challenge for us to allow people to enter data that were not thought at the moment we prepared the formats of the data.
+Anyway we will try to allow people to add some fields and/or table in the existing structure.
+This means that the input specs and the storing specs need to be modified in a simplified procedure.
+
+This simplified procedure will be induced automatically (with of course the need of confirmation procedure from the user).
+In the case of new field from existing tables (both as input and storing), it can be resolved quite easily by giving the type of the field.
+In the case of new tables, it is more complicated because it would imply the need to be able to give the type of authorizations for the table (only visible by the owner, or public), and the type of relationship with the other tables.
+
+## Comparing the data with the existing data in the database
+The procedure of integrating data in the database imply to make sure that the new data respect all the rules existing in the storing part of the database.
+Specific functions, associated with the input formats, will ensure that all is well, and if needed, ask for modifications to the user
+
+<!-- TO DO:
+explain which kind of rules may be important to enforce here
+-->
+
+## Transformation input into base format
+
+When all the verifications are made, the data is transformed as a database-compatible format in order to make them easier to insert in the existing tables of the database.
+
+## integrating the new input in the database
+
+Finally, generic function must be used for inserting the new lines in the database.
+
+
+
+# Specifications
+
+The input specifications will be kept, along with the storing spec in the spec schema of the database (this spec schema may be a part of the future package and come as a sqlite3 file in it).
+
+Input specifications will be kept in the following table:
+
+1. spec.in_pf (specifications concerning preformatting) => might be a particular field in the spec.rel table which allow to separate the preformatting formats from the other ones
+1. spec.in_tables (specifications concerning the tables, their mandatory characteristics, and the regex concerning their names)
+1. spec.in_field (specifications concerning the column of the tables)
+1. spec.in_rules (specifications the extra rules to be enforced in the field and tables)
+1. spec.in_function stores the R-functions which may be used for applying the different steps of data input 
+
+Input format will require extra tables in order to manage their characteristics:
+
+1. spec.in_requi (specifications concerning the requirement of an input format in terms of R-packages etc.)
+1. spec.in_format will recense all the different input formats and their versions
+1. spec.in_rel_tab a relationship table to tie the different specifications with the different rules
+
+## Creating the specification tables
+
+
+```r
+source("../scripts/mariusTmp/reinitializeSpecSchema.r")
+```
+
+## Representing the input specification tables
+
+```{r, fig.show='hide', message=FALSE, warning=FALSE}
+sib_adm <- dbConnect(PostgreSQL(),dbname = "sib_plot",user = "sib_adm",password = "sib")
+source("../functions/export_svg.R")
+require(dm)
+dm_object <- dm_from_src(sib_adm,schema = "spec")
+dm_object <- dm_object[names(dm_object)[grepl("^in_", names(dm_object)) | grepl("def_", names(dm_object))]]
+A <- dm_draw(dm_object, view_type = "all")
+B<- save_png(A,"../../Fig/graph_database_spec.png")
+dbDisconnect(sib_adm)
+```
+
+```{r}
+img <- png::readPNG(B)
+grid::grid.raster(img)
+```
+
+## Functions for managing input specifications
+
+*Note: the specification schema in the database is owned by the administrator, therefore all the functions here take at least an admin connection as argument*
+
+### Exporting an input specification
+
+#### List input specifications
+
+   
+   
+A simple wrapper function allows us to list the input formats:
+
+```{r, code=extractFunction("../functions/specs.R","listInputFormats")}
+eval(parse(text=extractFunction("../functions/specs.R","listInputFormats")))
+```
+
+For example:
+```{r}
+sib_adm <- dbConnect(PostgreSQL(), dbname = "sib_plot", user = "sib_adm", password = "sib")
+A <- listInputFormats(sib_adm)
+kable(A, booktab = T)
+dbDisconnect(sib_adm)
+```
+
+
+
+#### getting specification
+
+  
+
+A function allows us to export an input specification in a R list.
+
+```{r, code=extractFunction("../functions/specs.R","getInputSpec")}
+eval(parse(text=extractFunction("../functions/specs.R","getInputSpec")))
+```
+
+In order to make it work, we need to have a function which look for the last version in a list of version:
+```{r code=extractFunction("../functions/specs.R","maxVersion") }
+eval(parse(text=extractFunction("../functions/specs.R","maxVersion")))
+```
+
+It may be used like it:
+```{r}
+maxVersion(c("0.1","12.3","5.2.5"))
+```
+
+The function *getInputSpec* takes as arguments:
+
+1. *conn_adm* : a connection to the database as administrator
+1. *formatName*: the name of a format
+1. *formatVersion*: the format version as a character string, or the word "last" in order to find the last version of the format
+
+
+
+### Creating or modifying input specifications
+
+#### Version indentation
+The following functions allows us to indent version numbers:
+
+```{r code=extractFunction("../functions/specs.R","indentVersion") }
+eval(parse(text = extractFunction("../functions/specs.R","indentVersion")))
+```
+
+```{r}
+indentVersion("2.1","minor")
+indentVersion("3.4","major")
+```
+
+It will be useful for R to determine the new versions of input formats as we modify them.
+
+#### Preparing Excel file for creating new formats
+
+The following function prepare an Excel file which may be used to create a new format specification in the database.
+
+```{r code=extractFunction("../functions/specs.R","prepareInputFormat") }
+eval(parse(text = extractFunction("../functions/specs.R","prepareInputFormat")))
+```
+
+Then the users may modify the Excel, or the csv files for creating a new input format, which will be read by the function presented in the next paragraph.
+Lines may be deleted, modified or added.
+<!-- Note that modified lines should be shown by using a code for the line of type "m1,m2,...,mn" and that added lines should be noted "n1,n2,...,nn".
+-->
+```r
+prepareInputFormat(sib_adm, "BST_csv", author = "marius", "mi", dirName="../inputSpec/Bst_csv/", typeFile = "csv")
+```
+
+```{r code=extractFunction("../functions/sql_utilities.R","sqlizeNames") }
+eval(parse(text = extractFunction("../functions/sql_utilities.R","sqlizeNames")))
+```
+
+
+```r
+A <- read.csv("../inputSpec/Bst_csv/BST_csv_0.2_fields.csv")
+A$regex_reco <- paste(paste0("^",A$fieldname,"$"),paste0("^",sqlizeNames(A$fieldname),"$"),sep=";")
+A$fieldname <- sqlizeNames(A$fieldname)
+write.csv(A,file = "../inputSpec/Bst_csv/BST_csv_0.2_fields.csv")
+```
+
+#### Submitting a new input specification
+The following function takes as arguments files such as created in the prepareInputFormat function and create the input format specification in the database.
+
+The most important difficulty is that all modified lines in the tables will be given a new code in the specifications, so I might have a bad time to find the new and old lines and how to change them, particularly their references in the rules and references.
+I am not sure whether we should put anything in the files (cd_tab and cd_fields ; type n1 for new cd 1) or whether it would make more sense let the R and SQL codes make automatically sense of it.
+It is important as well make the verifications of a model, and maybe give the possibility to represent and analyse the files before putting them in the database (well I am not sure actually)
+
+
+<!-- TODO : in BST_csv there are very specific rules to make for the table recruitment, which should actually be the opposite of a foreign key: it should not exist yet
+I also realized that the function which manage the process of adding some censusn should have a step which is downloading all the data for the plot in the database, but not including the census0 and taxonomy in the input, except if there are some modifications to make.
+-->
+
+```{r}
+vecChar <- spec$fields$fieldname
+regex_spec <- strsplit(spec$fields$regex_reco,";")
+names(regex_spec)<- spec$fields$fieldname
+```
+
+
+
+
+### Representing an input specification
+
+
+
+**************************
+
+**Going out!**
+
+```{r}
+dbDisconnect(sib_adm)
+```
+
+
