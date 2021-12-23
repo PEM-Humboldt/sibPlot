@@ -929,6 +929,15 @@ insertNewInFormat <- function(spec, conn_adm)
       stop("Requirements are not yet implemented for input formats")
     }else{message("The format includes no requirement")}
   }else{message("The format includes no requirement")}
+  if ("functions" %in% names(spec))
+  {
+    if(nrow(spec$functions) > 0)
+    {
+      #TODO manage requirement for input format
+      stop("Functions are not yet implemented for input formats")
+    }else{message("The format includes no function")}
+  }else{message("The format includes no function")}
+  
   lapply(dbGetQuery(sib_adm, "SELECT table_name FROM information_schema.tables WHERE table_schema='spec' AND table_name ~ '^tmp_'")$table_name,
        function(x,co) dbRemoveTable(conn = co, c("spec",x)), co = sib_adm)
   dbCommit(conn_adm)
