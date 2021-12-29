@@ -3,6 +3,9 @@ sibPlot
 
 sibPlot is a project consisting in creating database formats and utilities for plant plot data in SiB Colombia (Sistema de Información sobre la Biodiversidad de Colombia).
 
+# News
+
+* December 29th, 2021: The package release was planned for December 28th. Unfortunately, some small difficulties(due to compatibility between PostgreSQL, SQLite and R) caused some delays in the programming work. Therefore I plan to release the first version of the package by mid-january...
 
 # Objectives
 
