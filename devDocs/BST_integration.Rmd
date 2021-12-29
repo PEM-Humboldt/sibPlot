@@ -35,6 +35,8 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 opts_chunk$set(cache=F,fig.path="../../Fig/BST_integration",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize',
                echo=T, message=T, warning=T)
 options(knitr.kable.NA = '---')
+source("../functions/extract_function.R")
+source("../functions/source_rmd.R")
 ```
 
 
@@ -191,4 +193,77 @@ A <- lapply(inputs,function(x,l2)
 ```
 
 # With formats
+```{r}
+source("../functions/extract_function.R")
+```
+
+
+
+## Reading raw files
+
+```{r code=extractFunction("../functions/specs.R","test_regex_multi")}
+eval(parse(text = extractFunction("../functions/specs.R","test_regex_multi")))
+```
+
+```{r code=extractFunction("../functions/input.R","read_rawFile")}
+eval(parse(text = extractFunction("../functions/input.R","read_rawFile")))
+```
+
+```{r code=extractFunction("../functions/input.R","read_rawFiles")}
+eval(parse(text = extractFunction("../functions/input.R","read_rawFiles")))
+```
+
+```{r}
+rawFiles <- read_rawFiles("../../CodeRoy/BasesHumboldt-MV/core/",typeFiles="csv")
+```
+
+# Preformatting
+
+In the case of the BST_csv format, it only consists in transposing the metadata table
+```{r, code=extractFunction("../functions/input.R","preformat_tables")}
+eval(parse(text = extractFunction("../functions/input.R","preformat_tables")))
+```
+
+```{r}
+sib_user <- dbConnect(PostgreSQL(),dbname = "sib_plot", user = "sib_user")
+rawFiles <- preformat_tables(rawFiles, sib_user, "BST_csv")
+```
+
+
+# Separation and recognition of tables
+
+```{r}
+eval(parse(text = extractFunction("../functions/specs.R","maxVersion")))
+```
+
+```{r}
+eval(parse(text = extractFunction("../functions/specs.R","getInputSpec")))
+```
+
+```{r, code=extractFunction("../functions/input.R","recog_tables")}
+eval(parse(text = extractFunction("../functions/input.R","recog_tables")))
+```
+
+```{r}
+sib_user <- dbConnect(PostgreSQL(), user = "sib_user", dbname = "sib_plot")
+BST_csv_spec <- getInputSpec(sib_user,"BST_csv")
+recoTables <- recog_tables(rawFiles = rawFiles ,conn = sib_user,formatName = "BST_csv")
+```
+
+
+# Separation of inputs
+```{r}
+eval(parse(text=extractFunction("../functions/input.R","input_sep")))
+sepInputs <- input_sep(rawFiles, recoTables, sib_user, "BST_csv","last")
+```
+
+# Checking input self-integrity
+
+
+
+```{r}
+checkSelfInteg <- lapply(sepInputs,checkInputSelfIntegrity, conn = sib_user,formatName = "BST_csv")
+
+```
+
 

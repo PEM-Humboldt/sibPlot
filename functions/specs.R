@@ -62,7 +62,7 @@ test_regex_multi <- function(vecChar,regex_spec,...)
   {for (j in 1:length(regex_spec[[i]]))
     {
     counter<-counter+1
-    mat_res[,counter]<-grepl(regex_spec[[i]][j],vecChar)#,...)
+    mat_res[,counter]<-grepl(regex_spec[[i]][j],vecChar,...)
     }
   }
   res0 <- lapply(as.data.frame(t(mat_res)),which)
@@ -75,7 +75,7 @@ test_regex_multi <- function(vecChar,regex_spec,...)
   {stop("\nMultiple results in the regex recognition process for the following entered strings:\n", paste("\"", vecChar[nbOk>1], "\"", sep = "", collapse = ", "))
   }
   res <- data.frame(testedString = vecChar, 
-    Reduce(rbind,sapply(res0,function(x,o,n)
+    Reduce(rbind,lapply(res0,function(x,o,n)
     {
       if (length(x) == 0) {return(data.frame(ok = NA,nb = NA))}
       return(data.frame(ok = unique(o[x]), nb = min(n[x])))
@@ -86,7 +86,7 @@ test_regex_multi <- function(vecChar,regex_spec,...)
 
 ##########END###########
 
-test_regex<-function(vecChar,vecRegex,...)
+test_regex <- function(vecChar,vecRegex,...)
 {
   mat_res<-matrix(nrow=length(vecChar),ncol=length(vecRegex))
   for(i in 1:length(vecRegex))
@@ -182,7 +182,7 @@ getInputSpec <- function(conn_adm, formatName, formatVersion = "last")
       WHERE formatname=$1 AND version=$2",
       params = list(formatName, formatVersion))
   res$fields <- dbGetQuery(conn_adm,
-      "SELECT fi.id_field, fi.cd_tab, tb.tablename, fi.fieldname, fi.example, fi.regex_reco, fi.typeof, fi.unit, fi.max_char, fi.min_num, fi.max_num, fi.mandatory, fi.extra, fi.regex_field, fi.ref_table, fi.ref_field, fi.lev_ref, fi.comment
+      "SELECT fi.id_field, fi.cd_tab, tb.tablename, fi.fieldname, fi.example, fi.regex_reco, fi.typeof, fi.unit, fi.max_char, fi.min_num, fi.max_num, fi.\"unique\", fi.mandatory, fi.extra, fi.regex_field, fi.ref_table, fi.ref_field, fi.lev_ref, fi.comment
       FROM spec.in_format fo
         JOIN spec.in_rel_field irt ON fo.id_for=irt.cd_for
         JOIN spec.in_fields fi ON irt.cd_field=fi.id_field
@@ -255,7 +255,7 @@ prepareInputFormat <- function(conn_adm, formatName, author = NA, typeUpdate = c
   {formatVersion <- indentVersion(fromVersion,typeUpdate)}
   if (typeUpdate == "new")
   {formatVersion <- "1.0"}
-  res$format <- data.frame(formatname = formatName,version = formatVersion, createdBy = author, description = res$format$description)
+  res$format <- data.frame(formatname = formatName,version = formatVersion, created_by = author, description = res$format$description)
   #TODO: make an explanation sheet for excel, or an explanation textFile for csv or... send a link to a document from gitHub which explains how to do
   
   # writing files
@@ -949,6 +949,9 @@ insertNewInFormat <- function(spec, conn_adm)
 #require(RPostgreSQL)
 #sib_adm <- dbConnect(PostgreSQL(), dbname = "sib_plot", user = "sib_adm")
 #source("../functions/extract_function.R")
+
+#eval(parse(text = extractFunction("../functions/specs.R", "maxVersion")))
+#eval(parse(text = extractFunction("../functions/specs.R", "getInputSpec")))
 #eval(parse(text = extractFunction("../functions/specs.R", "test_regex_multi")))
 #eval(parse(text = extractFunction("../functions/specs.R", "checkNewFormat")))
 #eval(parse(text = extractFunction("../functions/specs.R","prepareQueryId")))

@@ -63,6 +63,10 @@ source("../scripts/mariusTmp/reinitializeBST_csv0.1.r",max.deparse.length = Inf)
 ```
 
 # Extracting useful functions
+```{r}
+source("../functions/extract_function.R")
+```
+
 ## Regex test
 
 The function test_regex_multi allows to find the correspondance of a character vectors against multiple regex (and is used for recognizing fields in a tables as the ones corresponding in the formats).
@@ -138,6 +142,10 @@ eval(parse(text = extractFunction("../functions/specs.R","prepareInputFormat")))
 
 
 # Integrating BST_csv 0.2
+```{r}
+eval(parse(text=extractFunction("../functions/specs.R","checkNewFormat")))
+eval(parse(text=extractFunction("../functions/specs.R","insertNewInFormat")))
+```
 
 ```{r}
 sib_adm <- dbConnect(PostgreSQL(), dbname = "sib_plot", user = "sib_adm")
@@ -145,10 +153,18 @@ spec <- checkNewFormat(conn_adm = sib_adm, mainFile = "../inputSpec/Bst_csv/BST_
 insertNewInFormat(spec,sib_adm)
 ```
 
+# Integrating BST_csv 0.3
+
+```{r}
+spec <- checkNewFormat(conn_adm = sib_adm, mainFile = "../inputSpec/Bst_csv/BST_csv_0.3_format.csv", typeFile = "csv")
+insertNewInFormat(spec,sib_adm)
+```
+
+
 # Preparing files for future version of BST_csv
 
 ```{r}
-specNew <- prepareInputFormat(sib_adm, "BST_csv", author="marius", "minor", dirName="../inputSpec/Bst_csv/", typeFile="csv")
+#specNew <- prepareInputFormat(sib_adm, "BST_csv", author="marius", "minor", dirName="../inputSpec/Bst_csv/", typeFile="csv")
 ```
 
 
