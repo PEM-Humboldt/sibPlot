@@ -225,20 +225,22 @@ eval(parse(text = extractFunction("../functions/input.R","preformat_tables")))
 ```
 
 ```{r}
+eval(parse(text = extractFunction("../functions/specs.R","maxVersion")))
+```
+
+
+```{r}
+eval(parse(text = extractFunction("../functions/specs.R","getInputSpec")))
+```
+
+
+```{r}
 sib_user <- dbConnect(PostgreSQL(),dbname = "sib_plot", user = "sib_user")
 rawFiles <- preformat_tables(rawFiles, sib_user, "BST_csv")
 ```
 
 
 # Separation and recognition of tables
-
-```{r}
-eval(parse(text = extractFunction("../functions/specs.R","maxVersion")))
-```
-
-```{r}
-eval(parse(text = extractFunction("../functions/specs.R","getInputSpec")))
-```
 
 ```{r, code=extractFunction("../functions/input.R","recog_tables")}
 eval(parse(text = extractFunction("../functions/input.R","recog_tables")))
@@ -263,7 +265,11 @@ sepInputs <- input_sep(rawFiles, recoTables, sib_user, "BST_csv","last")
 
 ```{r}
 checkSelfInteg <- lapply(sepInputs,checkInputSelfIntegrity, conn = sib_user,formatName = "BST_csv")
-
+res <- list()
+for (i in 1:length(sepInputs))
+{
+  res[[i]] <- checkInputSelfIntegrity(input=sepInputs[[i]], conn=sib_user, formatName = "BST_csv")
+}
 ```
 
 

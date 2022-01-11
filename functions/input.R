@@ -400,13 +400,13 @@ checkMandatoryFields <- function(listError=list(), spec, input)
 checkTypeOfColumns <- function(listError=list(), specTypeR, input)# this function may modify the input
 {
   nameTables <- input$summary$tableType
-  cdTables <- spec$tables$id_tab[match(nameTables,spec$tables$tablename)]
+  cdTables <- specTypeR$tables$id_tab[match(nameTables,specTypeR$tables$tablename)]
   listError$typeofFullError <- list(ok = T, pb = data.frame(tablename = character(), fieldname = character(), type = character()))
   listError$typeofRowError <- list(ok = T, pb = data.frame(tablename = character(), fieldname = character(),type = character(), row = integer()))
   for (i in 1:length(cdTables))
   {
-    specTypeof <- spec$fields$typeofR[spec$fields$cd_tab == cdTables[i]]
-    names(specTypeof) <- spec$fields$fieldname[spec$fields$cd_tab == cdTables[i]]
+    specTypeof <- specTypeR$fields$typeofR[specTypeR$fields$cd_tab == cdTables[i]]
+    names(specTypeof) <- specTypeR$fields$fieldname[specTypeR$fields$cd_tab == cdTables[i]]
     commonFields <- intersect(colnames(input$content[[i]]),names(specTypeof))
     for (j in commonFields)
     {
@@ -564,33 +564,134 @@ checkReferences <- function(listError = list(), spec, input)
   refToCheck$field_referenced <- spec$fields$fieldname[match(refToCheck$ref_field,spec$fields$id_field)]
   #Do the referenced fields exist
   tabExists <- refToCheck$table_referenced %in% nameTables
+  if(any(tabExists)){
   fieExists <- apply(refToCheck[tabExists,c("table_referenced","field_referenced")], 1,
                      function(x,l)x[2] %in% colnames(l[[x[1]]]),l = input$content)
+  }else{fieExists <- rep(F,nrow(refToCheck))}
   listError$refTabExists <- list(ok=all(tabExists),pb = data.frame(refToCheck[tabExists,c("tablename","fieldname","table_referenced")]))
   listError$refFieldExists <- list(ok=all(fieExists),pb = data.frame(refToCheck[tabExists,c("tablename","fieldname","table_referenced","field_referenced")]))
   listError$missingRef <- list(ok = T,pb = data.frame())
   refToCheck <- refToCheck[tabExists & fieExists,]
   if (nrow(refToCheck))
   {
-    res <- apply(refToCheck,1,function(x,l){
-      val <- l[[x[1]]][,x[2]]
-      ref <- l[[x[5]]][,x[6]]
-      return(which(!is.na(val) & !val %in% ref))
-    },l = input$content)
-    listError$missingRef$pb <- data.frame(
-      tablename = rep(refToCheck$tablename,sapply(res,length)),
-      fieldname = rep(refToCheck$fieldname,sapply(res,length)),
-      table_referenced = rep(refToCheck$table_referenced,sapply(res,length)),
-      field_referenced = rep(refToCheck$field_referenced,sapply(res,length)),
-      row = Reduce(c,res)
-    )
-    listError$missingRef$pb$missingValue <- apply(listError$missingRef$pb,1,
-                                                  function(x,l)l[[x[1]]][x[5],x[2]], l = input$content)
-    listError$missingRef$ok<- (!nrow(listError$missingRef$pb))
+    res <- by(refToCheck,list(row = 1:nrow(refToCheck)),
+       function(row,l){
+         val <- l[[row$tablename]][,row$fieldname]
+         ref <- l[[row$table_referenced]][,row$field_referenced]
+         return(which(!is.na(val) & !val %in% ref))
+       }, l = input$content, simplify = F)
+    if (sum(sapply(res,length)) > 0)
+    {
+      listError$missingRef$pb <- data.frame(
+        tablename = rep(refToCheck$tablename,sapply(res,length)),
+        fieldname = rep(refToCheck$fieldname,sapply(res,length)),
+        table_referenced = rep(refToCheck$table_referenced,sapply(res,length)),
+        field_referenced = rep(refToCheck$field_referenced,sapply(res,length)),
+        row = Reduce(c,res)
+      )
+      listError$missingRef$pb$missingValue <- rep(NA,nrow(listError$missingRef$pb))
+      for (j in 1:nrow(listError$missingRef$pb))
+      {
+        r <- listError$missingRef$pb[j,]
+        listError$missingRef$pb$missingValue[j] <- as.character(input$content[[r$tablename]][r$row,r$fieldname])
+      }
+    }
+    listError$missingRef$ok <- (!nrow(listError$missingRef$pb))
   }
   return(listError)
 }
+  
 
+checkRuleNotIn <- function(listError = list(), spec, input)
+{
+  nameTables <- input$summary$tableType
+  cdTables <- spec$tables$id_tab[match(nameTables,spec$tables$tablename)]
+  notInRules <- spec$rules[spec$rules$typerule == "NOT IN",]
+  extractTab1 <- gsub("^([A-Za-z0-9_]+) ?\\((.*)\\) NOT IN ([A-Za-z0-9_]+) ?\\((.*)\\)$","\\1",notInRules$rule)
+  extractTab2 <- gsub("^([A-Za-z0-9_]+) ?\\((.*)\\) NOT IN ([A-Za-z0-9_]+) ?\\((.*)\\)$","\\3",notInRules$rule)
+  extractFields1 <- gsub("^([A-Za-z0-9_]+) ?\\((.*)\\) NOT IN ([A-Za-z0-9_]+) ?\\((.*)\\)$","\\2",notInRules$rule)
+  extractFields2 <- gsub("^([A-Za-z0-9_]+) ?\\((.*)\\) NOT IN ([A-Za-z0-9_]+) ?\\((.*)\\)$","\\4",notInRules$rule)
+  sepFields1 <- strsplit(extractFields1, " *,? +")
+  sepFields2 <- strsplit(extractFields2, " *,? +")
+  sepFields1 <- lapply(sepFields1, gsub,pattern = "(^ *)|( *$)", replacement = "")
+  sepFields2 <- lapply(sepFields2, gsub,pattern = "(^ *)|( *$)", replacement = "")
+# Initialize errors
+  listError$ruleNotInRefTabMissing <- listError$ruleNotInRefFieldMissing <- listError$ruleNotIn <-
+    list(ok = T, pb = data.frame())
+# Do referencing tables and fields exist?
+  for (j in 1:length(extractTab1))
+  {
+    # test whether tab and fields concerned are present
+    tab1Ok <- extractTab1[j] %in% names(input$content)
+    field1Ok <- rep(F, length(sepFields1[[j]]))
+    tab2Ok <- extractTab2[j] %in% names(input$content)
+    field2Ok <- rep(F, length(sepFields2[[j]]))
+    if (tab1Ok) {
+      field1Ok <- sepFields1[[j]] %in% colnames(input$content[[extractTab1[j]]])
+    }
+    if (tab2Ok) {
+      field2Ok <- sepFields2[[j]] %in% colnames(input$content[[extractTab2[j]]])
+    }
+    if (all(field1Ok))# Referencing fields ok! 
+    {
+      if (!tab2Ok)
+      {
+        listError$ruleNotInRefTabMissing$pb <- 
+          rbind(listError$ruleNotInRefTabMissing$pb,
+                data.frame(
+                  rule = notInRules[j,"id_rule"],
+                  missingTab = extractTab2[j]))
+      }else{
+        listError$ruleNotInRefFieldMissing <-
+          rbind(listError$ruleNotInRefFieldMissing$pb,
+                data.frame(
+                  rule = rep(notInRules[j,"id_rule"], sum(!field2Ok)),
+                  referenced_tab = rep(extractTab2[j], sum(!field2Ok)),
+                  missingField = sepFields2[[j]][!field2Ok]
+                ))
+      }
+      if (all(field2Ok))
+      {
+        refing_fac <- interaction(input$content[[extractTab1[j]]][,sepFields1[[j]]],drop = T)
+        refed_fac <- interaction(input$content[[extractTab2[j]]][,sepFields2[[j]]], drop = T)
+        pb_cases <- which(!is.na(refing_fac) & refing_fac %in% refed_fac)
+        listError$ruleNotIn$pb <- 
+          rbind(listError$ruleNotIn$pb,
+                data.frame(
+                  rule = rep(notInRules[j,"id_rule"], length(pb_cases)),
+                  rule_lb = rep(notInRules[j,"rule"], length(pb_cases)),
+                  row = pb_cases,
+                  value = refing_fac[pb_cases]
+                ))
+      }
+    }
+  }
+  listError$ruleNotInRefTabMissing$ok <- !as.logical(nrow(listError$ruleNotInRefTabMissing$pb))
+  listError$ruleNotInRefFieldMissing$ok <- !as.logical(nrow(listError$ruleNotInRefFieldMissing$pb))
+  listError$ruleNotIn$ok <- !as.logical(nrow(listError$ruleNotIn$pb))
+  return(listError)
+}
+
+checkRuleAllIdent <- function(listError = list(), spec, input)
+{
+  
+}
+  
+checkRuleUnique <- function(listError = list(), spec, input)
+{
+  stop("UNIQUE rules not implemented yet")
+}
+checkRuleForeignMul <- function(listError = list(), spec, input)
+{
+  stop("Multiple foreign keys not implemented yet")
+}
+
+checkRules <- function(listError=list(), spec, input)
+{
+    
+}
+  
+  
 checkInputSelfIntegrity <- function(input, conn, formatName, formatVersion= "last")
 {
   spec <- getInputSpec(conn, formatName, formatVersion)
@@ -625,6 +726,19 @@ checkInputSelfIntegrity <- function(input, conn, formatName, formatVersion= "las
 # Checking on foreign keys
   listError <- checkReferences(listError, spec, input)
 # Checking on rules
-
+  listError <- checkRuleNotIn(listError, spec, input)
   return(list(selfInteg = listError, input = input))
 }
+  
+  input <- sepInputs[[5]]
+  conn <- sib_user
+  formatName <- "BST_csv"
+  formatVersion <- "last"
+
+A <- data.frame(c("a","b","c",NA),c(1,2,3,4))
+B <- data.frame(c("c","d","e","f"),c(3,4,5,NA))
+fac_A <- interaction(A, drop = T)
+fac_B <- interaction(B, drop = T)
+fac_A %in% fac_B
+match(fac_A, fac_B)
+match(fac_B,fac_A)  
