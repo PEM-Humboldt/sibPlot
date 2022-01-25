@@ -397,6 +397,7 @@ checkMandatoryFields <- function(listError=list(), spec, input)
   return(listError)
 }
 
+# TODO: We've got a problem, numeric are converted without errors to integer without making any warnings or error and transform for instance, 132.5 to 132... In some particular cases of the "ind" column of the census0 file, it might be problematic
 checkTypeOfColumns <- function(listError=list(), specTypeR, input)# this function may modify the input
 {
   nameTables <- input$summary$tableType
@@ -604,8 +605,6 @@ checkReferences <- function(listError = list(), spec, input)
 
 checkRuleNotIn <- function(listError = list(), spec, input)
 {
-  nameTables <- input$summary$tableType
-  cdTables <- spec$tables$id_tab[match(nameTables,spec$tables$tablename)]
   notInRules <- spec$rules[spec$rules$typerule == "NOT IN",]
   extractTab1 <- gsub("^([A-Za-z0-9_]+) ?\\((.*)\\) NOT IN ([A-Za-z0-9_]+) ?\\((.*)\\)$","\\1",notInRules$rule)
   extractTab2 <- gsub("^([A-Za-z0-9_]+) ?\\((.*)\\) NOT IN ([A-Za-z0-9_]+) ?\\((.*)\\)$","\\3",notInRules$rule)
@@ -642,7 +641,7 @@ checkRuleNotIn <- function(listError = list(), spec, input)
                   rule = notInRules[j,"id_rule"],
                   missingTab = extractTab2[j]))
       }else{
-        listError$ruleNotInRefFieldMissing <-
+        listError$ruleNotInRefFieldMissing$pb <-
           rbind(listError$ruleNotInRefFieldMissing$pb,
                 data.frame(
                   rule = rep(notInRules[j,"id_rule"], sum(!field2Ok)),
@@ -674,7 +673,51 @@ checkRuleNotIn <- function(listError = list(), spec, input)
 
 checkRuleAllIdent <- function(listError = list(), spec, input)
 {
-  
+  allIdentRules <- spec$rules[spec$rules$typerule == "ALL IDENTICAL" & spec$rule$tablename %in% names(input$content),]
+  listError$ruleAllIdent <- listError$ruleAllIdentMissingField <- list(ok = T, pb = data.frame())
+  if (nrow(allIdentRules))
+  {
+    for (j in 1:nrow(allIdentRules))
+    {
+      refing_fields <- strsplit(sub("^(.+) ?\\<IN\\>.*$","\\1",allIdentRules[j,"rule"])," *, *")[[1]]
+      refing_fields <- gsub("(^ *)|( *$)","",refing_fields)
+      refed_fields <- strsplit(sub("^.*\\<IN\\> ?(.*)$","\\1",allIdentRules[j,"rule"])," *, *")[[1]]
+      refed_fields <- gsub("(^ *)|( *$)","",refed_fields)
+      if (!all(refing_fields %in% colnames(input$content[[allIdentRules$tablename[j]]]))) {next}
+      if (any(!refed_fields %in% colnames(input$content[[allIdentRules$tablename[j]]])))
+      {
+        missField <- refed_fields[!refed_fields %in% colnames(input$content[[allIdentRules$tablename]])]
+        listError$ruleAllIndentMissingField$pb <- 
+          rbind(ruleAllIdentMissingField$pb,
+                data.frame(
+                  cd_rule = rep(allIdentRules[j,"id_rule"],length(missField)),
+                  tablename = rep(allIdentRules[j,"tablename"],length(missField)),
+                  missingField = missField
+                ))
+      }else{
+        refing_fac <- interaction(input$content[[allIdentRules[j,"tablename"]]][,refing_fields],drop = T)
+        refed_fac <- interaction(input$content[[allIdentRules[j,"tablename"]]][,refed_fields], drop = T)
+        uniq_in <- tapply(refing_fac,refed_fac,unique,simplify = F)
+        ln_uniq_in <- sapply(uniq_in,length) 
+        if (sum(ln_uniq_in) > length(ln_uniq_in))
+        {
+          listError$ruleAllIdent$pb <- rbind(listError$ruleAllIdent$pb,
+            data.frame(
+              cd_rule = rep(allIdentRules[j,"id_rule"], sum(ln_uniq_in[ln_uniq_in > 1])),
+              tablename = rep(allIdentRules[j,"tablename"], sum(ln_uniq_in[ln_uniq_in > 1])),
+              rule = rep(allIdentRules[j,"tablename"], sum(ln_uniq_in[ln_uniq_in > 1])),
+              values = Reduce(c,uniq_in[ln_uniq_in > 1]),
+              in_values = rep(names(uniq_in)[ln_uniq_in > 1],ln_uniq_in[ln_uniq_in > 1])
+            )
+          )
+        }
+      }
+      
+    }
+  listError$ruleAllIdentMissingField$ok <- !as.logical(nrow(listError$ruleAllIdentMissingField$pb))
+  listError$ruleAllIdent$ok <- !as.logical(nrow(listError$ruleAllIdent$pb))
+  }
+  return(listError)
 }
   
 checkRuleUnique <- function(listError = list(), spec, input)
@@ -686,11 +729,6 @@ checkRuleForeignMul <- function(listError = list(), spec, input)
   stop("Multiple foreign keys not implemented yet")
 }
 
-checkRules <- function(listError=list(), spec, input)
-{
-    
-}
-  
   
 checkInputSelfIntegrity <- function(input, conn, formatName, formatVersion= "last")
 {
@@ -727,10 +765,20 @@ checkInputSelfIntegrity <- function(input, conn, formatName, formatVersion= "las
   listError <- checkReferences(listError, spec, input)
 # Checking on rules
   listError <- checkRuleNotIn(listError, spec, input)
+  listError <- checkRuleAllIdent(listError, spec, input)
+  if (any(spec$rules$id_rule == "UNIQUE") && any(spec$rules[spec$rules$typerule == "UNIQUE","tablename"] %in% names(input$content)))
+  {
+  listError <- checkRuleUnique(listError, spec, input)
+  }
+  if (any(spec$rules$id_rule == "FOREIGN MULTI") && any(spec$rules[spec$rules$typerule == "FOREIGN MULTI","tablename"] %in% names(input$content)))
+  {
+  listError <- checkRuleForeignMul(listError, spec, input)
+  }
+  
   return(list(selfInteg = listError, input = input))
 }
   
-  input <- sepInputs[[5]]
+  input <- sepInputs[[42]]
   conn <- sib_user
   formatName <- "BST_csv"
   formatVersion <- "last"

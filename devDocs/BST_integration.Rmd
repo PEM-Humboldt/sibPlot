@@ -256,7 +256,7 @@ recoTables <- recog_tables(rawFiles = rawFiles ,conn = sib_user,formatName = "BS
 # Separation of inputs
 ```{r}
 eval(parse(text=extractFunction("../functions/input.R","input_sep")))
-sepInputs <- input_sep(rawFiles, recoTables, sib_user, "BST_csv","last")
+sepInputs <- input_sep(rawFiles, recoTables, sib_user, "BST_csv","0.3")
 ```
 
 # Checking input self-integrity
@@ -264,12 +264,47 @@ sepInputs <- input_sep(rawFiles, recoTables, sib_user, "BST_csv","last")
 
 
 ```{r}
-checkSelfInteg <- lapply(sepInputs,checkInputSelfIntegrity, conn = sib_user,formatName = "BST_csv")
-res <- list()
-for (i in 1:length(sepInputs))
-{
-  res[[i]] <- checkInputSelfIntegrity(input=sepInputs[[i]], conn=sib_user, formatName = "BST_csv")
-}
+checkSelfInteg <- lapply(sepInputs,checkInputSelfIntegrity, conn = sib_user,formatName = "BST_csv", formatVersion="0.3")
+tabOK <- sapply(checkSelfInteg,function(x)sapply(x$selfInteg,function(y)y$ok))
+rowSums(!tabOK)
 ```
 
+```{r}
+pbFieldMandat <- Reduce(rbind,lapply(checkSelfInteg,function(x)x$selfInteg$mandatFieldNa$pb))
+table(interaction(pbFieldMandat[c("tablename","fieldname")], drop = T))
+```
+
+```{r}
+Reduce(rbind,lapply(checkSelfInteg,function(x)
+{
+  if (!x$selfInteg$mandatFieldNa$ok && any(x$selfInteg$mandatFieldNa$pb$fieldname == "tag"))
+  {
+    return(x$input$event)
+  }else{
+    return(data.frame())
+  }
+}))
+```
+```{r}
+pbTypeof <- Reduce(rbind,lapply(checkSelfInteg,function(x)
+  data.frame(plot = rep(x$input$event[1], nrow(x$selfInteg$typeofRowError$pb)), 
+             event = rep(x$input$event[2], nrow(x$selfInteg$typeofRowError$pb)), 
+             x$selfInteg$typeofRowError$pb)))
+```
+
+```{r}
+pbMaxChar <- Reduce(rbind,lapply(checkSelfInteg,function(x)
+  data.frame(plot = rep(x$input$event["plot"], nrow(x$selfInteg$maxChar$pb)), 
+             event = rep(x$input$event["event"], nrow(x$selfInteg$maxChar$pb)),
+             x$selfInteg$maxChar$pb)))
+table(interaction(pbMaxChar[c("tablename","fieldname")], drop=T))
+```
+
+```{r}
+pbUniques <- Reduce(rbind,lapply(checkSelfInteg,function(x)
+  data.frame(plot = rep(x$input$event["plot"], nrow(x$selfInteg$Uniques$pb)), 
+             event = rep(x$input$event["event"], nrow(x$selfInteg$Uniques$pb)),
+             x$selfInteg$Uniques$pb)))
+table(interaction(pbUniques[c("tablename","fieldname")], drop = T))
+```
 
