@@ -35,6 +35,8 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 opts_chunk$set(cache=F,fig.path="../../Fig/input_spec_BST",tidy='styler',cache.rebuild = F,formatSQL = TRUE, size='scriptsize',
                echo=T, message=T, warning=T)
 options(knitr.kable.NA = '---')
+source("../functions/extract_function.R")
+source("../functions/source_rmd.R")
 ```
 
 
@@ -43,8 +45,131 @@ options(knitr.kable.NA = '---')
 I have developped the functions for managing the formats taking this format into account.
 Check file [specs.R](../functions/specs.R).
 
+```{r}
+require(RPostgreSQL)
+sib_adm <- dbConnect(PostgreSQL(), dbname = "sib_plot", user = "sib_adm")
+```
+
+# Reinitializing Spec schema
+
+```{r, code=readLines("../scripts/mariusTmp/reinitializeSpecSchema.r")}
+source("../scripts/mariusTmp/reinitializeSpecSchema.r",max.deparse.length = Inf)
+```
+
+# Inserting BST_csv 0.1
+
+```{r, code=readLines("../scripts/mariusTmp/reinitializeBST_csv0.1.r")}
+source("../scripts/mariusTmp/reinitializeBST_csv0.1.r",max.deparse.length = Inf)
+```
+
+# Extracting useful functions
+```{r}
+source("../functions/extract_function.R")
+```
+
+## Regex test
+
+The function test_regex_multi allows to find the correspondance of a character vectors against multiple regex (and is used for recognizing fields in a tables as the ones corresponding in the formats).
+
+```{r code= extractFunction("../functions/specs.R", "test_regex_multi")}
+eval(parse(text = extractFunction("../functions/specs.R", "test_regex_multi")))
+```
+
+## Check New Format
+
+The function checkNewFormat is a R-function which allows to verify the integrity of a new input format, without much interactions with the spec schema of the database. It returns a cleaned list of tables that may be used for the new format integration in the database.
+
+
+```{r code= extractFunction("../functions/specs.R", "checkNewFormat")}
+eval(parse(text = extractFunction("../functions/specs.R", "checkNewFormat")))
+```
+
+## Prepare SQL queries with identifiers
+
+The function prepareQueryId is a function which help prepare queries in the case some of the parameters are identifiers (of table or fields). Only the PostgreSQL version of a connection works for now.
+It returns an argument list that may be used with do.call and dbSendQuery.
+
+```{r code=extractFunction("../functions/specs.R","prepareQueryId")}
+eval(parse(text = extractFunction("../functions/specs.R","prepareQueryId")))
+```
+
+## Insert New format
+
+The function insertNewInFormat works with the result of checkNewFormat as an argument and allows to insert the new format specification in the spec schema of the database.
+
+```{r code=extractFunction("../functions/specs.R","insertNewInFormat")}
+eval(parse(text = extractFunction("../functions/specs.R","insertNewInFormat")))
+```
+
+## Preparing new format
+### Get Input spec
+The function getInputSpec allows to extract a format from the spec schema of the database.
+
+```{r code=extractFunction("../functions/specs.R","getInputSpec")}
+eval(parse(text = extractFunction("../functions/specs.R","getInputSpec")))
+```
+
+The function listInputFormats allows to list the input formats in a given database
+
+```{r code=extractFunction("../functions/specs.R","listInputFormats")}
+eval(parse(text = extractFunction("../functions/specs.R","listInputFormats")))
+```
+
+
+### Managing versions
+
+The functions maxVersion and indentVersions allow to manage versions, in general, but here allows more precisely to indent and compare the versions of the input formats
+
+
+```{r code=extractFunction("../functions/specs.R","maxVersion")}
+eval(parse(text = extractFunction("../functions/specs.R","maxVersion")))
+```
+
+```{r code=extractFunction("../functions/specs.R","indentVersion")}
+eval(parse(text = extractFunction("../functions/specs.R","indentVersion")))
+```
+
+### Preparing new input format
+
+Preparing a new format using the extraction of an existing one is made through the function prepareInputFormat, which writes the prepared files in a given directory
+
+
+```{r code=extractFunction("../functions/specs.R","prepareInputFormat")}
+eval(parse(text = extractFunction("../functions/specs.R","prepareInputFormat")))
+```
+
+
+
+
+# Integrating BST_csv 0.2
+```{r}
+eval(parse(text=extractFunction("../functions/specs.R","checkNewFormat")))
+eval(parse(text=extractFunction("../functions/specs.R","insertNewInFormat")))
+```
 
 ```{r}
-#dbDisconnect(sib_adm)
+sib_adm <- dbConnect(PostgreSQL(), dbname = "sib_plot", user = "sib_adm")
+spec <- checkNewFormat(conn_adm = sib_adm, mainFile = "../inputSpec/Bst_csv/BST_csv_0.2_format.csv", typeFile = "csv")
+insertNewInFormat(spec,sib_adm)
+```
+
+# Integrating BST_csv 0.3
+
+```{r}
+spec <- checkNewFormat(conn_adm = sib_adm, mainFile = "../inputSpec/Bst_csv/BST_csv_0.3_format.csv", typeFile = "csv")
+insertNewInFormat(spec,sib_adm)
+```
+
+
+# Preparing files for future version of BST_csv
+
+```{r}
+#specNew <- prepareInputFormat(sib_adm, "BST_csv", author="marius", "minor", dirName="../inputSpec/Bst_csv/", typeFile="csv")
+```
+
+
+
+```{r} 
+dbDisconnect(sib_adm)
 ```
 

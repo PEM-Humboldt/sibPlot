@@ -1,0 +1,11 @@
+"id_tab","tablename","mandatory","regex_reco","extra","comment"
+1,"metadata",FALSE,"^metadata$",FALSE,NA
+2,"dates",FALSE,"^dates$",FALSE,NA
+3,"census0",FALSE,"^census0$",FALSE,NA
+4,"xy",FALSE,"^xy$",FALSE,NA
+5,"aliveStatus",FALSE,"^aliveStatus$",FALSE,NA
+6,"growth",FALSE,"^growth$;^(growth)([1-9][0-9]?)$",FALSE,NA
+7,"mortality",FALSE,"^mortality$;^(mortality)([1-9][0-9]?)$",FALSE,NA
+8,"recruitment",FALSE,"^recruitment$;^(recruitment)([1-9][0-9]?)$",FALSE,NA
+9,"taxonomy",FALSE,"^taxonomy$",FALSE,NA
+10,"members",FALSE,"^members$",FALSE,NA
