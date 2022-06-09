@@ -6,6 +6,7 @@ sibPlot is a project consisting in creating database formats and utilities for p
 # News
 
 * December 29th, 2021: The package release was planned for December 28th. Unfortunately, some small difficulties(due to compatibility between PostgreSQL, SQLite and R) caused some delays in the programming work. Therefore I plan to release the first version of the package by mid-january...
+* June 9th, 2022: Various "adventures" took me a lot of time in 2022... Therefore I could not keep working on the package. However, I have some interesting projects to work with the Humboldt institute till the end of the year, and a part of our agreement would be to make some improvement in this project! More news very soon!
 
 # Objectives
 
